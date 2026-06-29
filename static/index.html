@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>对飞牛弹琴 · 虚拟钢琴</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" type="image/png" href="/assets/icon.png" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/icon.png" alt="" />
+      <h1>对飞牛弹琴</h1>
+    </div>
+    <div class="topbar-actions">
+      <label class="toggle">
+        <input type="checkbox" id="toggle-key" checked />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>键位提示</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-note" checked />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>音名</span>
+      </label>
+      <label class="volume">
+        <span>音量</span>
+        <input type="range" id="volume" min="0" max="100" value="80" />
+      </label>
+    </div>
+  </header>
+
+  <main class="stage">
+
+
+    <div class="piano" id="piano">
+      <div class="piano-band">
+        <div class="brand-strip" >
+          <span class="brand-strip-text">对飞牛弹琴 · PIANO</span>
+        </div>
+        <div class="piano-tip">点击琴键,或使用键盘演奏 · 按住 <kbd>`</kbd> 或 <kbd>Backspace</kbd> + 按键 演奏黑键</div>
+      </div>
+      <div class="piano-keys" id="keys"></div>
+    </div>
+
+    <div class="keyboard-diagram" id="keyboard-diagram"></div>
+  </main>
+
+  <footer class="footer">
+    <span>对飞牛弹琴 · 米恋泥@小宠来瞭望塔</span>
+  </footer>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,564 @@
+:root {
+  --bg-0: #0e1020;
+  --bg-1: #161a2e;
+  --bg-2: #1c2140;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e6e8f4;
+  --text-dim: #9aa0c2;
+  --accent: #6b8cff;
+  --accent-2: #a87bff;
+  --hot: #ff5577;
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --key-white: #fdfdfd;
+  --key-white-shadow: #c5c8d6;
+  --key-black: #1a1c25;
+  --key-black-edge: #0a0b10;
+  --key-active: #6b8cff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at top left, rgba(107, 140, 255, 0.12), transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(168, 123, 255, 0.10), transparent 50%),
+    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 4px 12px rgba(107, 140, 255, 0.30);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+/* Toggle switch */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { display: none; }
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: #3a3f5f;
+  border-radius: 999px;
+  position: relative;
+  transition: background 0.2s;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+.toggle input:checked + .toggle-track { background: var(--accent); }
+.toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
+
+/* Volume */
+.volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.volume input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 110px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+.volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(107, 140, 255, 0.5);
+}
+.volume input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+
+/* Stage */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 18px 40px;
+  gap: 22px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 18px;
+  backdrop-filter: blur(6px);
+}
+.hint kbd {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 12px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  margin: 0 2px;
+}
+
+/* Piano */
+.piano {
+  width: min(96vw, 1280px);
+  background: linear-gradient(180deg, #1c1f30 0%, #0d0f1c 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  overflow: hidden;
+}
+
+.piano-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 44px;
+  padding: 0 18px;
+  background:
+    linear-gradient(180deg, #20243a, #14172a);
+  border-bottom: 1px solid rgba(0,0,0,0.5);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+}
+
+.brand-strip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.brand-strip-text {
+  font-size: 13px;
+  letter-spacing: 6px;
+  font-weight: 800;
+  background: linear-gradient(180deg, #fff 0%, #b8bcd6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+}
+
+.piano-tip {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.piano-keys {
+  --white-count: 36;
+  position: relative;
+  height: clamp(180px, 26vh, 260px);
+  display: flex;
+  background: #06070d;
+  padding: 0;
+}
+
+.key-white {
+  flex: 0 0 calc(100% / var(--white-count));
+  position: relative;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f5f6fb 92%, #e3e6f1 100%);
+  border-left: 1px solid #d8dbe8;
+  border-right: 1px solid #d8dbe8;
+  border-bottom: 1px solid #c5c8d6;
+  border-radius: 0 0 6px 6px;
+  box-shadow:
+    inset 0 -4px 0 rgba(0,0,0,0.05),
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    0 6px 8px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: background 0.05s ease, transform 0.05s ease, box-shadow 0.05s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 0 14px;
+  z-index: 1;
+}
+.key-white:hover {
+  background: linear-gradient(180deg, #f3f5fb 0%, #e9ecf5 100%);
+}
+.key-white.active {
+  background: linear-gradient(180deg, #6b8cff 0%, #4a6be0 100%);
+  box-shadow:
+    inset 0 -3px 0 rgba(0,0,0,0.15),
+    inset 0 2px 0 rgba(255,255,255,0.3),
+    0 2px 4px rgba(0,0,0,0.5);
+  transform: translateY(1px);
+}
+.key-white.active .key-name,
+.key-white.active .key-note { color: #fff; }
+
+.key-black {
+  position: absolute;
+  top: 0;
+  width: calc(100% / var(--white-count) * 0.62);
+  height: 64%;
+  background:
+    linear-gradient(180deg, #2a2d3d 0%, #15171f 60%, #0a0b10 100%);
+  border: 1px solid #000;
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+  box-shadow:
+    inset 0 -3px 0 rgba(255,255,255,0.08),
+    inset 0 2px 0 rgba(0,0,0,0.6),
+    0 5px 8px rgba(0,0,0,0.6);
+  cursor: pointer;
+  transition: background 0.05s ease, transform 0.05s ease, box-shadow 0.05s ease;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 0 8px;
+}
+.key-black:hover {
+  background: linear-gradient(180deg, #353846 0%, #1a1c25 100%);
+}
+.key-black.active {
+  background: linear-gradient(180deg, #4a4d5d 0%, #1f212b 100%);
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 -1px 0 rgba(255,255,255,0.06),
+    inset 0 2px 0 rgba(0,0,0,0.5),
+    0 1px 2px rgba(0,0,0,0.5);
+}
+.key-black.active .key-name { color: #fff; }
+
+.key-name {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7290;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  text-transform: uppercase;
+}
+.key-name-primary {
+  display: inline-block;
+}
+.key-name-extra {
+  font-size: 10px;
+  opacity: 0.55;
+  font-weight: 500;
+}
+.key-note {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.key-black .key-name {
+  color: #d8dbe8;
+  font-size: 11px;
+}
+
+.key-shift-hint {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.5px;
+}
+
+/* Keyboard binding diagram */
+.keyboard-diagram {
+  --u: 36px;
+  width: min(96vw, 1200px);
+  margin: 0 auto;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-x: auto;
+  user-select: none;
+  text-align: center;
+}
+.kb-section {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.kb-row {
+  display: flex;
+  gap: 4px;
+  /* Lock the row to a single key's height so a rowSpan key (e.g. Enter)
+     can overflow visually without inflating the row and creating a blank
+     row underneath. */
+  height: calc(var(--u) + 4px);
+  flex: 0 0 auto;
+}
+
+.kb-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--u) + 4px);
+  flex: 0 0 var(--u);
+  padding: 1px 2px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  position: relative;
+  cursor: default;
+}
+.kb-key.w15   { flex-basis: calc(var(--u) * 1.5); }
+.kb-key.w175  { flex-basis: calc(var(--u) * 1.75); }
+.kb-key.w2    { flex-basis: calc(var(--u) * 2); }
+.kb-key.w225  { flex-basis: calc(var(--u) * 2.25); }
+.kb-key.w275  { flex-basis: calc(var(--u) * 2.75); }
+.kb-key.w125  { flex-basis: calc(var(--u) * 1.25); }
+.kb-key.w625  { flex-basis: calc(var(--u) * 6.25); }
+
+/* L-shape keys: span the current row + the row below. The row is fixed at
+   a single key's height (see .kb-row), so this key intentionally overflows
+   downward to cover the position of the next row's right-most key (e.g.
+   Enter covers RShift, mirroring a real ANSI keyboard). */
+.kb-key.row-span-2 {
+  height: calc((var(--u) + 4px) * 2 + 4px);
+  align-self: flex-start;
+  justify-content: flex-start;
+  padding-top: 4px;
+  z-index: 2;
+}
+
+.kb-key.has-note {
+  background: linear-gradient(180deg, rgba(107, 140, 255, 0.22), rgba(107, 140, 255, 0.10));
+  border-color: rgba(107, 140, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(107, 140, 255, 0.15) inset;
+  cursor: pointer;
+  transition: background 0.08s ease, box-shadow 0.08s ease, transform 0.05s ease;
+}
+.kb-key.has-note:hover {
+  background: linear-gradient(180deg, rgba(107, 140, 255, 0.32), rgba(107, 140, 255, 0.16));
+  border-color: rgba(107, 140, 255, 0.6);
+}
+.kb-key.has-note:active { transform: translateY(1px); }
+.kb-key.has-note .kb-key-label { color: var(--text); }
+
+/* Active highlight: mirrors the piano's key highlight when the bound note
+   is triggered either by keyboard, mouse, or by clicking the diagram. */
+.kb-key.has-note.active {
+  background: linear-gradient(180deg, rgba(107, 140, 255, 0.55), rgba(107, 140, 255, 0.30));
+  border-color: rgba(107, 140, 255, 0.85);
+  box-shadow: 0 0 14px rgba(107, 140, 255, 0.55);
+}
+.kb-key.has-note.active .kb-key-label,
+.kb-key.has-note.active .kb-key-notes { color: #fff; }
+
+/* Modifier keys (e.g. ` and Backspace that toggle black-key mode) are
+   tinted with a soft purple so they stand out from regular keys without
+   screaming for attention. */
+.kb-key.is-modifier {
+  background: linear-gradient(180deg, rgba(168, 123, 255, 0.16), rgba(168, 123, 255, 0.06));
+  border-color: rgba(168, 123, 255, 0.40);
+  box-shadow: 0 0 0 1px rgba(168, 123, 255, 0.10) inset;
+}
+.kb-key.is-modifier:hover {
+  background: linear-gradient(180deg, rgba(168, 123, 255, 0.24), rgba(168, 123, 255, 0.10));
+  border-color: rgba(168, 123, 255, 0.55);
+}
+.kb-key.is-modifier .kb-key-label { color: #c4a8f0; }
+.kb-key-sublabel {
+  font-size: 9px;
+  font-weight: 600;
+  color: #c4a8f0;
+  margin-top: 1px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.kb-key-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  line-height: 1;
+}
+
+.kb-key-notes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 2px;
+  line-height: 1.1;
+}
+.kb-note-white {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.kb-note-black {
+  font-size: 9px;
+  color: rgba(234, 232, 244, 0.7);
+  font-weight: 600;
+}
+
+.kb-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.kb-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kb-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.kb-legend-swatch.bound {
+  background: linear-gradient(180deg, rgba(107, 140, 255, 0.45), rgba(107, 140, 255, 0.20));
+  border: 1px solid rgba(107, 140, 255, 0.5);
+}
+.kb-legend-swatch.empty {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 14px 18px 22px;
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .piano-keys { height: 200px; }
+  .key-name { font-size: 9px; }
+  .key-note { font-size: 8px; }
+  .brand h1 { font-size: 16px; }
+  .topbar { padding: 14px 16px; }
+  .topbar-actions { gap: 14px; }
+}
+@media (max-width: 600px) {
+  .piano-keys { height: 170px; }
+  .key-name, .key-note { display: none; }
+  .piano-tip { display: none; }
+  .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }
+  .topbar-actions { width: 100%; justify-content: space-between; }
+  .hint { font-size: 12px; padding: 6px 12px; text-align: center; }
+}
+
+/* Animations */
+@keyframes ripple {
+  0% { box-shadow: 0 0 0 0 rgba(107, 140, 255, 0.6); }
+  100% { box-shadow: 0 0 0 18px rgba(107, 140, 255, 0); }
+}
+.key-white.active {
+  animation: ripple 0.4s ease-out;
+}
