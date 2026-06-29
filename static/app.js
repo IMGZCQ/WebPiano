@@ -1,7 +1,7 @@
 // Virtual Piano - main app
 // Vanilla JS + Web Audio API, no build step.
 
-const SAMPLE_BASE = "/samples/piano/";
+const SAMPLE_BASE = "samples/piano/";
 const WHITE_COUNT = 36;
 
 // Note layout. Each entry: name, keys (array of supported keys), file, type, whiteIndex.
