@@ -5,6 +5,10 @@
 
 ***
 
+<img width="1280" height="720" alt="1280" src="https://github.com/user-attachments/assets/f3c5a3c4-ccb7-415b-9564-eed2237c4829" />
+
+
+
 ## ✨ 功能特点
 
 | 特性                | 说明                                                                |
@@ -181,6 +185,10 @@ sha256sum -c webpiano-linux-amd64.sha256
 📦 三方商店 Fndepot 搜索 **"对飞牛弹琴"** 下载安装
 
 ***
+
+## 🎹 运行界面
+<img width="1094" height="559" alt="PixPin_2026-06-30_02-48-13" src="https://github.com/user-attachments/assets/3d3338a5-eaf4-4b61-8114-026b8ef57f99" />
+
 
 ## 📁 目录结构
 
