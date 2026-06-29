@@ -13,6 +13,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /build/go-piano ./
+COPY --from=builder /build/static ./static
 
 RUN apk add --no-cache ca-certificates tzdata
 
