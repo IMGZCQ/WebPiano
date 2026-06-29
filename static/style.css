@@ -364,7 +364,7 @@ body {
   --u: 36px;
   width: min(96vw, 1200px);
   margin: 0 auto;
-  padding: 16px 20px;
+  padding: 12px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
