@@ -46,13 +46,7 @@ jobs:
             # tag推送触发，直接使用git tag
             FULL_TAG=${{ github.ref_name }}
           else
-            # 手动触发，拼接v前缀
-            RAW_TAG=${{ inputs.tag_name }}
-            if [[ "$RAW_TAG" == v* ]]; then
-              FULL_TAG="$RAW_TAG"
-            else
-              FULL_TAG="v$RAW_TAG"
-            fi
+            FULL_TAG=${{ inputs.tag_name }}
           fi
           CLEAN_TAG=${FULL_TAG#v}
           echo "full_tag=$FULL_TAG" >> $GITHUB_OUTPUT
