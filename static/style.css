@@ -47,7 +47,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 28px;
+  padding: 10px 28px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
   backdrop-filter: blur(8px);
@@ -166,7 +166,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 28px 18px 40px;
+  padding: 16px 18px 0px;
   gap: 22px;
 }
 
@@ -192,7 +192,7 @@ body {
 
 /* Piano */
 .piano {
-  width: min(96vw, 1280px);
+  width: min(98vw, 1360px);
   background: linear-gradient(180deg, #1c1f30 0%, #0d0f1c 100%);
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.06);
@@ -239,7 +239,7 @@ body {
 .piano-keys {
   --white-count: 36;
   position: relative;
-  height: clamp(180px, 26vh, 260px);
+  height: clamp(160px, 22vh, 260px);
   display: flex;
   background: #06070d;
   padding: 0;
