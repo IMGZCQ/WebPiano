@@ -137,19 +137,19 @@ jobs:
           VERSION=${{ needs.get-version.outputs.ver }}
           LDFLAGS="-s -w -X main.Version=$VERSION"
 
-          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o go-piano-linux-amd64 main.go
-          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o go-piano-linux-arm64 main.go
-          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o go-piano-windows-amd64.exe main.go
-          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o go-piano-darwin-amd64 main.go
-          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o go-piano-darwin-arm64 main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-linux-amd64 main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o webpiano-linux-arm64 main.go
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-windows-amd64.exe main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-darwin-amd64 main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o webpiano-darwin-arm64 main.go
 
       - name: 生成SHA256校验文件
         run: |
-          sha256sum go-piano-linux-amd64 > go-piano-linux-amd64.sha256
-          sha256sum go-piano-linux-arm64 > go-piano-linux-arm64.sha256
-          sha256sum go-piano-windows-amd64.exe > go-piano-windows-amd64.exe.sha256
-          sha256sum go-piano-darwin-amd64 > go-piano-darwin-amd64.sha256
-          sha256sum go-piano-darwin-arm64 > go-piano-darwin-arm64.sha256
+          sha256sum webpiano-linux-amd64 > webpiano-linux-amd64.sha256
+          sha256sum webpiano-linux-arm64 > webpiano-linux-arm64.sha256
+          sha256sum webpiano-windows-amd64.exe > webpiano-windows-amd64.exe.sha256
+          sha256sum webpiano-darwin-amd64 > webpiano-darwin-amd64.sha256
+          sha256sum webpiano-darwin-arm64 > webpiano-darwin-arm64.sha256
 
       - name: 创建GitHub Release上传制品
         uses: softprops/action-gh-release@v2
@@ -157,16 +157,16 @@ jobs:
           tag_name: ${{ needs.get-version.outputs.ver }}
           name: Release ${{ needs.get-version.outputs.ver }}
           files: |
-            go-piano-linux-amd64
-            go-piano-linux-amd64.sha256
-            go-piano-linux-arm64
-            go-piano-linux-arm64.sha256
-            go-piano-windows-amd64.exe
-            go-piano-windows-amd64.exe.sha256
-            go-piano-darwin-amd64
-            go-piano-darwin-amd64.sha256
-            go-piano-darwin-arm64
-            go-piano-darwin-arm64.sha256
+            webpiano-linux-amd64
+            webpiano-linux-amd64.sha256
+            webpiano-linux-arm64
+            webpiano-linux-arm64.sha256
+            webpiano-windows-amd64.exe
+            webpiano-windows-amd64.exe.sha256
+            webpiano-darwin-amd64
+            webpiano-darwin-amd64.sha256
+            webpiano-darwin-arm64
+            webpiano-darwin-arm64.sha256
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
