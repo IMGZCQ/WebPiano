@@ -654,4 +654,21 @@ volumeEl.addEventListener("input", () => {
     };
     window.addEventListener("click", resume, { once: true });
     window.addEventListener("keydown", resume, { once: true });
+
+    // Keep keyboard focus inside the iframe so window keydown events fire
+    // even when the page is embedded. Without this, clicks on a piano key
+    // call preventDefault() and never transfer focus, so keys appear dead
+    // until the user clicks a non-key area.
+    const ensureIframeFocus = () => {
+        try { window.focus(); } catch (_) {}
+        const ae = document.activeElement;
+        if (!ae || ae === document.body) {
+            try { document.body.focus(); } catch (_) {}
+            return;
+        }
+        if (ae.matches && ae.matches("input, textarea, select, [contenteditable]")) return;
+        try { document.body.focus(); } catch (_) {}
+    };
+    window.addEventListener("pointerdown", ensureIframeFocus);
+    window.addEventListener("touchstart", ensureIframeFocus);
 })();
