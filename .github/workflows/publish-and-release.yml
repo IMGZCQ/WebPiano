@@ -106,7 +106,7 @@ jobs:
           tags: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${{ needs.get-version.outputs.ver }}
           # 条件追加latest标签，不会产生空行
           outputs: type=image,name=target,${{ inputs.push_latest && 'push=true,tag=latest' || 'push=false' }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # 可选：把版本传入Dockerfile构建参数
