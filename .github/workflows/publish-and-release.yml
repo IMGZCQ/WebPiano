@@ -107,7 +107,7 @@ jobs:
             ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${{ needs.get-version.outputs.ver }}
             ${{ inputs.push_latest == true && format('{0}/{1}:latest', env.DOCKERHUB_REGISTRY, env.DOCKERHUB_IMAGE_NAME) || '' }}
           # 条件追加latest标签，不会产生空行
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # 可选：把版本传入Dockerfile构建参数
