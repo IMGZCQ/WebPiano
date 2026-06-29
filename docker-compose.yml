@@ -1,6 +1,7 @@
 services:
-  go-piano:
-    container_name: go-piano             # 容器名称
-    image: imgzcq/go-piano:latest        # ⚠︎ 重构时请先删除本地镜像
+  webpiano:
+    container_name: webpiano             # 容器名称
+    image: imgzcq/webpiano:latest        # ⚠︎ 重构时请先删除本地镜像
     ports: [9177:9177]                   # 访问端口:内部端口
     restart: always                      # 开机自启
+  

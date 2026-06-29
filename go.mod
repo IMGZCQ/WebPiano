@@ -1,3 +1,3 @@
-module github.com/example/go-piano
+module github.com/imgzcq/webpiano
 
 go 1.21

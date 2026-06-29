@@ -7,15 +7,15 @@ COPY main.go ./
 COPY internal ./internal
 COPY static ./static
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-piano main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o webpiano main.go
 
 FROM alpine:latest
 WORKDIR /app
 
-COPY --from=builder /build/go-piano ./
+COPY --from=builder /build/webpiano ./
 COPY --from=builder /build/static ./static
 
 RUN apk add --no-cache ca-certificates tzdata
 
 EXPOSE 9177
-CMD ["./go-piano"]
+CMD ["./webpiano"]

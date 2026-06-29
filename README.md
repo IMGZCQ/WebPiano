@@ -57,7 +57,7 @@
 ### 本地直接跑
 
 ```bash
-cd go-piano
+cd webpiano
 go run .
 ```
 
@@ -74,17 +74,17 @@ go run . -addr=":9000" -root=./static
 构建并启动：
 
 ```bash
-cd go-piano
+cd webpiano
 docker compose up -d
 ```
 
-镜像名默认 `imgzcq/go-piano:latest`，映射端口 `8080:8080`，开自启。
+镜像名默认 `imgzcq/webpiano:latest`，映射端口 `8080:8080`，开自启。
 
 单独构建：
 
 ```bash
-docker build -t go-piano .
-docker run -d --name go-piano -p 8080:8080 --restart always go-piano
+docker build -t webpiano .
+docker run -d --name webpiano -p 8080:8080 --restart always webpiano
 ```
 
 ### 发布版本
@@ -93,10 +93,23 @@ docker run -d --name go-piano -p 8080:8080 --restart always go-piano
 - 推送 Docker 镜像到 Docker Hub（多架构：amd64 / arm64 / armv7）
 - 产出 5 个平台的二进制（Linux / Windows / macOS）+ sha256 校验和，自动创建 GitHub Release
 
+**GitHub Secrets 配置**（Settings → Secrets and variables → Actions → New repository secret）：
+
+| Secret 名 | 必填 | 说明 |
+|---|---|---|
+| `DOCKERHUB_USERNAME` | 否 | Docker Hub 用户名。缺失时 Docker 推送步骤自动跳过，只发布二进制 |
+| `DOCKERHUB_TOKEN` | 否 | Docker Hub Access Token（不是密码，建议在 https://hub.docker.com/settings/security 生成） |
+| `GITHUB_TOKEN` | 自动 | GitHub Actions 内置，无需手动配置，用于创建 Release |
+
+手动触发时可选 `build_type`：
+- `docker_and_release`（默认）：两个都做
+- `docker`：只推 Docker
+- `release`：只发二进制
+
 ## 项目结构
 
 ```
-go-piano/
+webpiano/
 ├── main.go                       # 入口：HTTP 服务 + 优雅关闭
 ├── go.mod                        # 模块声明，无第三方依赖
 ├── Dockerfile                    # 多阶段构建，最终镜像仅含二进制
@@ -134,7 +147,7 @@ go-piano/
 | `*.mp3 / *.ogg / *.wav / *.flac` | `public, max-age=86400` |
 | `*.js / *.css / *.html` | `no-cache` |
 
-实现见 [server.go](file:///f:/飞牛图标工具/piano/go-piano/internal/server/server.go)。
+实现见 [server.go](file:///f:/飞牛图标工具/piano/webpiano/internal/server/server.go)。
 
 ## 致谢
 
