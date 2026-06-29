@@ -103,9 +103,10 @@ jobs:
           context: .
           push: true
           # 修复版本取值：统一从前置job拿版本，不再依赖inputs
-          tags: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${{ needs.get-version.outputs.ver }}
+          tags: |
+            ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${{ needs.get-version.outputs.ver }}
+            ${{ inputs.push_latest == true && format('{0}/{1}:latest', env.DOCKERHUB_REGISTRY, env.DOCKERHUB_IMAGE_NAME) || '' }}
           # 条件追加latest标签，不会产生空行
-          outputs: type=image,name=target,${{ inputs.push_latest && 'push=true,tag=latest' || 'push=false' }}
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -152,7 +153,7 @@ jobs:
           sha256sum webpiano-darwin-arm64 > webpiano-darwin-arm64.sha256
 
       - name: 创建GitHub Release上传制品
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.get-version.outputs.ver }}
           name: Release ${{ needs.get-version.outputs.ver }}
