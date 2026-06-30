@@ -327,6 +327,7 @@ body {
   color: #6b7290;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   text-transform: uppercase;
+  pointer-events: none; /* let mouse events fall through to the key */
 }
 .key-name-primary {
   display: inline-block;
@@ -341,6 +342,7 @@ body {
   color: var(--accent);
   font-weight: 700;
   margin-top: 2px;
+  pointer-events: none; /* let mouse events fall through to the key */
 }
 .key-black .key-name {
   color: #d8dbe8;
@@ -357,6 +359,7 @@ body {
   color: rgba(255,255,255,0.45);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   letter-spacing: 0.5px;
+  pointer-events: none; /* let mouse events fall through to the key */
 }
 
 /* Keyboard binding diagram */
@@ -530,7 +533,7 @@ body {
 /* Footer */
 .footer {
   text-align: center;
-  padding: 14px 18px 22px;
+  padding: 8px 18px 8px;
   font-size: 12px;
   color: var(--text-dim);
   opacity: 0.6;

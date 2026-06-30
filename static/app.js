@@ -346,7 +346,11 @@ function makeKbKeyEl(keyDef, keyToNotes) {
             if (isBlackModeActive()) note = notes.find((n) => n.type === "black");
             if (!note) note = notes.find((n) => n.type === "white") || notes[0];
             if (note) {
-                playNote(note);
+                pressMouseNote(note.name);
+                if (lastPointerTrigger !== note.name) {
+                    lastPointerTrigger = note.name;
+                    playNote(note);
+                }
                 activateByName(note.name);
             }
         });
@@ -480,47 +484,85 @@ function setKeyVisible() {
     });
 }
 
+// Visual-only: set the .active class on the piano key and the matching
+// diagram keys for this note. Press/release is tracked separately via
+// holdNote / releaseNote so the highlight stays while a key is held.
+// Multiple notes can be active at once (e.g. keyboard chord); mouse/touch
+// drag cleanup is handled by pressMouseNote / pressTouchNote which release
+// the previous note before holding the new one.
 function activateByName(name) {
     const el = keysEl.querySelector(`[data-name="${CSS.escape(name)}"]`);
-    if (!el) return;
-    // Clear active state from any other key so dragging leaves a clean trail
-    // and previously highlighted keys always recover.
-    keysEl.querySelectorAll(".key-white.active, .key-black.active").forEach((k) => {
-        if (k !== el) k.classList.remove("active");
-    });
-    el.classList.add("active");
-    if (activateByName._t) clearTimeout(activateByName._t);
-    activateByName._t = setTimeout(() => el.classList.remove("active"), 220);
+    if (el) el.classList.add("active");
 
     // Mirror the highlight onto the keyboard diagram for the bound physical
     // keys. The diagram may not be in the DOM during early init, so guard it.
     const diagram = document.getElementById("keyboard-diagram");
     const kbIds = noteToKbIds.get(name);
     if (diagram && kbIds && kbIds.length > 0) {
-        diagram.querySelectorAll(".kb-key.active").forEach((k) => k.classList.remove("active"));
-        const matched = [];
         kbIds.forEach((kbId) => {
             const kbEl = diagram.querySelector(`[data-kb-id="${kbId}"]`);
-            if (kbEl) {
-                kbEl.classList.add("active");
-                matched.push(kbEl);
-            }
+            if (kbEl) kbEl.classList.add("active");
         });
-        if (activateByName._kbT) clearTimeout(activateByName._kbT);
-        activateByName._kbT = setTimeout(() => {
-            matched.forEach((k) => k.classList.remove("active"));
-        }, 220);
     }
 }
 
-function activateByKey(key, isBlackMode) {
-    // Prefer the black key when black-mode is active (the primary key in the
-    // note's `keys` list is the one used with ` or Backspace held).
-    let note = null;
-    if (isBlackMode) {
-        note = NOTES.find((n) => n.keys.includes(key) && n.type === "black");
+// Press/release tracking: a note stays highlighted as long as at least one
+// press source (mouse, touch, or a keyboard key) is still holding it.
+const noteHoldCounts = new Map();
+let mouseHeldNote = null;
+let touchHeldNote = null;
+const keyToHeldNote = new Map();
+
+function setHighlight(name, on) {
+    const el = keysEl.querySelector(`[data-name="${CSS.escape(name)}"]`);
+    if (el) {
+        if (on) el.classList.add("active");
+        else el.classList.remove("active");
     }
-    if (!note) note = NOTES.find((n) => n.keys.includes(key) && n.type === "white");
+    const diagram = document.getElementById("keyboard-diagram");
+    const kbIds = noteToKbIds.get(name);
+    if (diagram && kbIds && kbIds.length > 0) {
+        kbIds.forEach((kbId) => {
+            const kbEl = diagram.querySelector(`[data-kb-id="${kbId}"]`);
+            if (kbEl) {
+                if (on) kbEl.classList.add("active");
+                else kbEl.classList.remove("active");
+            }
+        });
+    }
+}
+
+function holdNote(name) {
+    if (!name) return;
+    const cur = noteHoldCounts.get(name) || 0;
+    noteHoldCounts.set(name, cur + 1);
+    if (cur === 0) setHighlight(name, true);
+}
+
+function releaseNote(name) {
+    if (!name) return;
+    const cur = noteHoldCounts.get(name) || 0;
+    if (cur <= 1) {
+        noteHoldCounts.delete(name);
+        setHighlight(name, false);
+    } else {
+        noteHoldCounts.set(name, cur - 1);
+    }
+}
+
+function releaseAllHeldNotes() {
+    for (const name of noteHoldCounts.keys()) {
+        setHighlight(name, false);
+    }
+    noteHoldCounts.clear();
+    mouseHeldNote = null;
+    touchHeldNote = null;
+    keyToHeldNote.clear();
+    lastPointerTrigger = null;
+}
+
+function activateByKey(key, isBlackMode) {
+    const note = resolveNote(key, isBlackMode);
     if (!note) return;
     playNote(note);
     activateByName(note.name);
@@ -537,6 +579,16 @@ const blackModeKeys = new Set();
 
 function isBlackModeActive() {
     return blackModeKeys.has("`") || blackModeKeys.has("Backspace");
+}
+
+// Look up the note triggered by a key, preferring the black variant when
+// black-mode is active. Returns null if the key is not bound.
+function resolveNote(key, isBlackMode) {
+    if (isBlackMode) {
+        const black = NOTES.find((n) => n.keys.includes(key) && n.type === "black");
+        if (black) return black;
+    }
+    return NOTES.find((n) => n.keys.includes(key) && n.type === "white") || null;
 }
 
 window.addEventListener("keydown", (e) => {
@@ -569,6 +621,12 @@ window.addEventListener("keydown", (e) => {
     if (pressedKeys.has(key)) return;
     pressedKeys.add(key);
 
+    const note = resolveNote(key, isBlackModeActive());
+    if (note) {
+        keyToHeldNote.set(key, note.name);
+        holdNote(note.name);
+    }
+
     activateByKey(key, isBlackModeActive());
 });
 
@@ -582,21 +640,42 @@ window.addEventListener("keyup", (e) => {
         return;
     }
     const key = normalizeKey(e);
-    if (key) pressedKeys.delete(key);
+    if (key) {
+        pressedKeys.delete(key);
+        const heldName = keyToHeldNote.get(key);
+        if (heldName) {
+            keyToHeldNote.delete(key);
+            releaseNote(heldName);
+        }
+    }
 });
 
 window.addEventListener("blur", () => {
     pressedKeys.clear();
     blackModeKeys.clear();
+    releaseAllHeldNotes();
 });
 
 // ---------- Mouse / touch ----------
-function playFromElement(el) {
+// Tracks the last note the mouse/touch triggered so that dragging over the
+// same key (or its inner label spans) doesn't re-fire the audio. The
+// highlight is managed separately by holdNote / releaseNote and stays on
+// for the full duration of the press.
+let lastPointerTrigger = null;
+
+function playFromElement(el, options) {
     if (!el) return;
     const name = el.dataset.name;
     if (!name) return;
     const note = NOTES.find((n) => n.name === name);
     if (!note) return;
+    if (!options || options.skipAudioIfSame !== false) {
+        if (lastPointerTrigger === name) {
+            activateByName(name);
+            return;
+        }
+    }
+    lastPointerTrigger = name;
     playNote(note);
     activateByName(name);
 }
@@ -605,22 +684,69 @@ keysEl.addEventListener("mousedown", (e) => {
     const el = e.target.closest(".key-white, .key-black");
     if (!el) return;
     e.preventDefault();
-    playFromElement(el);
+    pressMouseNote(el.dataset.name);
+    playFromElement(el, { skipAudioIfSame: true });
 });
 
 keysEl.addEventListener("mouseover", (e) => {
     if (e.buttons !== 1) return;
     const el = e.target.closest(".key-white, .key-black");
     if (!el) return;
-    playFromElement(el);
+    pressMouseNote(el.dataset.name);
+    playFromElement(el, { skipAudioIfSame: true });
 });
 
 keysEl.addEventListener("touchstart", (e) => {
     const el = e.target.closest(".key-white, .key-black");
     if (!el) return;
     e.preventDefault();
-    playFromElement(el);
+    pressTouchNote(el.dataset.name);
+    playFromElement(el, { skipAudioIfSame: true });
 }, { passive: false });
+
+// Release the held note when the mouse / touch is released anywhere on the
+// page (including on a non-piano element, the diagram, or off the iframe).
+window.addEventListener("mouseup", () => {
+    if (mouseHeldNote) {
+        releaseNote(mouseHeldNote);
+        mouseHeldNote = null;
+    }
+    lastPointerTrigger = null;
+});
+window.addEventListener("touchend", () => {
+    if (touchHeldNote) {
+        releaseNote(touchHeldNote);
+        touchHeldNote = null;
+    }
+    lastPointerTrigger = null;
+});
+window.addEventListener("touchcancel", () => {
+    if (touchHeldNote) {
+        releaseNote(touchHeldNote);
+        touchHeldNote = null;
+    }
+    lastPointerTrigger = null;
+});
+
+function pressMouseNote(name) {
+    if (mouseHeldNote && mouseHeldNote !== name) {
+        releaseNote(mouseHeldNote);
+    }
+    if (mouseHeldNote !== name) {
+        mouseHeldNote = name;
+        holdNote(name);
+    }
+}
+
+function pressTouchNote(name) {
+    if (touchHeldNote && touchHeldNote !== name) {
+        releaseNote(touchHeldNote);
+    }
+    if (touchHeldNote !== name) {
+        touchHeldNote = name;
+        holdNote(name);
+    }
+}
 
 // ---------- Controls ----------
 showKeyEl.addEventListener("change", setKeyVisible);
