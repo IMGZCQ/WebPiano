@@ -456,6 +456,11 @@ const keysEl = document.getElementById("keys");
 const showKeyEl = document.getElementById("toggle-key");
 const showNoteEl = document.getElementById("toggle-note");
 const volumeEl = document.getElementById("volume");
+const touchModeEl = document.getElementById("toggle-touch");
+const touchPianoEl = document.getElementById("touch-piano");
+const touchKeysHighEl = document.getElementById("touch-keys-high");
+const touchKeysLowEl = document.getElementById("touch-keys-low");
+let touchPianoRendered = false;
 
 function renderPiano() {
     keysEl.innerHTML = "";
@@ -494,6 +499,64 @@ function renderPiano() {
     });
 }
 
+// Render the two touch-mode rows. Each row is a self-contained mini piano
+// covering a sub-range of NOTES. Black keys are positioned using a local
+// white index so they line up with the row's own white keys.
+function renderTouchPiano() {
+    renderTouchRow(touchKeysHighEl, "F4", "C7");
+    renderTouchRow(touchKeysLowEl, "C2", "E4");
+    touchPianoRendered = true;
+}
+
+function renderTouchRow(container, startName, endName) {
+    container.innerHTML = "";
+    const startIdx = NOTES.findIndex((n) => n.name === startName);
+    const endIdx = NOTES.findIndex((n) => n.name === endName);
+    if (startIdx === -1 || endIdx === -1) return;
+
+    const rowNotes = NOTES.slice(startIdx, endIdx + 1);
+    const whiteNotes = rowNotes.filter((n) => n.type === "white");
+    const whiteCount = whiteNotes.length;
+    if (whiteCount === 0) return;
+    const baseWhiteIndex = whiteNotes[0].whiteIndex;
+    container.style.setProperty("--white-count", whiteCount);
+
+    const whiteWidth = 100 / whiteCount;
+    const blackWidth = whiteWidth * 0.62;
+
+    whiteNotes.forEach((n) => {
+        const el = document.createElement("div");
+        el.className = "key-white";
+        el.dataset.name = n.name;
+        el.dataset.type = "white";
+
+        const primary = displayKey(n.keys[0]);
+        const extras = n.keys
+            .slice(1)
+            .map((k) => `<span class="key-name-extra">${displayKey(k)}</span>`)
+            .join("");
+
+        el.innerHTML =
+            `<span class="key-name"><span class="key-name-primary">${primary}</span>${extras}</span>` +
+            `<span class="key-note">${n.name}</span>`;
+        container.appendChild(el);
+    });
+
+    rowNotes
+        .filter((n) => n.type === "black")
+        .forEach((n) => {
+            const el = document.createElement("div");
+            el.className = "key-black";
+            el.dataset.name = n.name;
+            el.dataset.type = "black";
+            const localWhiteIndex = n.whiteIndex - baseWhiteIndex;
+            el.style.left = `calc(${(localWhiteIndex + 1) * whiteWidth}% - ${blackWidth / 2}%)`;
+            el.style.width = `${blackWidth}%`;
+            el.innerHTML = `<span class="key-shift-hint">\`${displayKey(n.keys[0])}</span>`;
+            container.appendChild(el);
+        });
+}
+
 function setKeyVisible() {
     const showKey = showKeyEl.checked;
     const showNote = showNoteEl.checked;
@@ -515,8 +578,9 @@ function setKeyVisible() {
 // drag cleanup is handled by pressMouseNote / pressTouchNote which release
 // the previous note before holding the new one.
 function activateByName(name) {
-    const el = keysEl.querySelector(`[data-name="${CSS.escape(name)}"]`);
-    if (el) el.classList.add("active");
+    document
+        .querySelectorAll(`[data-name="${CSS.escape(name)}"]`)
+        .forEach((el) => el.classList.add("active"));
 
     // Mirror the highlight onto the keyboard diagram for the bound physical
     // keys. The diagram may not be in the DOM during early init, so guard it.
@@ -538,11 +602,12 @@ let touchHeldNote = null;
 const keyToHeldNote = new Map();
 
 function setHighlight(name, on) {
-    const el = keysEl.querySelector(`[data-name="${CSS.escape(name)}"]`);
-    if (el) {
-        if (on) el.classList.add("active");
-        else el.classList.remove("active");
-    }
+    document
+        .querySelectorAll(`[data-name="${CSS.escape(name)}"]`)
+        .forEach((el) => {
+            if (on) el.classList.add("active");
+            else el.classList.remove("active");
+        });
     const diagram = document.getElementById("keyboard-diagram");
     const kbIds = noteToKbIds.get(name);
     if (diagram && kbIds && kbIds.length > 0) {
@@ -704,29 +769,35 @@ function playFromElement(el, options) {
     activateByName(name);
 }
 
-keysEl.addEventListener("mousedown", (e) => {
-    const el = e.target.closest(".key-white, .key-black");
-    if (!el) return;
-    e.preventDefault();
-    pressMouseNote(el.dataset.name);
-    playFromElement(el, { skipAudioIfSame: true });
-});
+// Wire mousedown / mouseover (drag) / touchstart to any key container — the
+// original piano and both touch-mode rows share the same key markup (class
+// .key-white / .key-black with data-name) and the same press semantics, so
+// one helper wires them all up.
+function attachKeyHandlers(container) {
+    container.addEventListener("mousedown", (e) => {
+        const el = e.target.closest(".key-white, .key-black");
+        if (!el) return;
+        e.preventDefault();
+        pressMouseNote(el.dataset.name);
+        playFromElement(el, { skipAudioIfSame: true });
+    });
 
-keysEl.addEventListener("mouseover", (e) => {
-    if (e.buttons !== 1) return;
-    const el = e.target.closest(".key-white, .key-black");
-    if (!el) return;
-    pressMouseNote(el.dataset.name);
-    playFromElement(el, { skipAudioIfSame: true });
-});
+    container.addEventListener("mouseover", (e) => {
+        if (e.buttons !== 1) return;
+        const el = e.target.closest(".key-white, .key-black");
+        if (!el) return;
+        pressMouseNote(el.dataset.name);
+        playFromElement(el, { skipAudioIfSame: true });
+    });
 
-keysEl.addEventListener("touchstart", (e) => {
-    const el = e.target.closest(".key-white, .key-black");
-    if (!el) return;
-    e.preventDefault();
-    pressTouchNote(el.dataset.name);
-    playFromElement(el, { skipAudioIfSame: true });
-}, { passive: false });
+    container.addEventListener("touchstart", (e) => {
+        const el = e.target.closest(".key-white, .key-black");
+        if (!el) return;
+        e.preventDefault();
+        pressTouchNote(el.dataset.name);
+        playFromElement(el, { skipAudioIfSame: true });
+    }, { passive: false });
+}
 
 // Release the held note when the mouse / touch is released anywhere on the
 // page (including on a non-piano element, the diagram, or off the iframe).
@@ -782,11 +853,98 @@ volumeEl.addEventListener("input", () => {
     }
 });
 
+// ---------- Touch mode ----------
+// Toggle the dual-row fullscreen piano for mobile / touch play. The state
+// is persisted to localStorage so the choice survives page reloads. The
+// piano + keyboard diagram are hidden while touch mode is on (the body
+// class drives the CSS) and the two touch rows are lazily rendered on
+// first activation to keep the initial DOM light.
+const TOUCH_MODE_KEY = "fnpiano.touchMode";
+
+// Detect a phone-sized device with a touch screen so we can auto-enable
+// touch mode on the first visit. The user's explicit toggle always wins:
+// once they turn it off (or on) we store "0"/"1" in localStorage and
+// never auto-flip again.
+function isMobileDevice() {
+    if (typeof window.matchMedia === "function" &&
+        window.matchMedia("(max-width: 768px) and (pointer: coarse)").matches) {
+        return true;
+    }
+    return /Android|webOS|iPhone|iPod|Opera Mini/i.test(navigator.userAgent || "");
+}
+
+// Try to lock the device into landscape so the piano always sits on the
+// long edge of the screen. Chrome on Android refuses orientation.lock()
+// unless it runs inside a user gesture, so we attempt on load and retry
+// on the first pointerdown / keydown. On browsers / platforms that don't
+// support the API (notably iOS Safari in a regular tab) we silently give
+// up and let the user rotate manually.
+function tryLockLandscape() {
+    if (!isMobileDevice()) return;
+    if (typeof screen === "undefined" || !screen.orientation ||
+        typeof screen.orientation.lock !== "function") return;
+    try {
+        const p = screen.orientation.lock("landscape");
+        if (p && typeof p.catch === "function") {
+            p.catch(() => { /* ignore — will retry on next gesture */ });
+        }
+    } catch (_) { /* not supported / not allowed */ }
+}
+
+function setTouchMode(on) {
+    if (on) {
+        if (!touchPianoRendered) renderTouchPiano();
+        document.body.classList.add("touch-mode");
+        touchPianoEl.hidden = false;
+    } else {
+        document.body.classList.remove("touch-mode");
+        touchPianoEl.hidden = true;
+    }
+}
+
+touchModeEl.addEventListener("change", () => {
+    const on = touchModeEl.checked;
+    setTouchMode(on);
+    try { localStorage.setItem(TOUCH_MODE_KEY, on ? "1" : "0"); } catch (_) {}
+});
+
 // ---------- Init ----------
 (async function init() {
     renderPiano();
     setKeyVisible();
     renderKeyboardDiagram();
+
+    // Wire the touch row containers up regardless of touch mode — their
+    // handlers are no-ops until the rows are actually rendered, but this
+    // way toggling touch mode on at any point "just works".
+    attachKeyHandlers(keysEl);
+    attachKeyHandlers(touchKeysHighEl);
+    attachKeyHandlers(touchKeysLowEl);
+
+    // Restore / decide touch-mode preference. An explicit user choice
+    // ("0" or "1") always wins; on the very first visit we fall back to
+    // device detection so phones get touch mode out of the box.
+    let savedValue = null;
+    try { savedValue = localStorage.getItem(TOUCH_MODE_KEY); } catch (_) {}
+    let shouldEnableTouch;
+    if (savedValue === "1") shouldEnableTouch = true;
+    else if (savedValue === "0") shouldEnableTouch = false;
+    else shouldEnableTouch = isMobileDevice();
+    if (shouldEnableTouch) {
+        touchModeEl.checked = true;
+        setTouchMode(true);
+    }
+
+    // Try to force landscape on mobile so the piano sits on the long edge.
+    // Chrome on Android needs this to happen inside a user gesture, so we
+    // also retry on the first pointerdown. The one-shot listener is removed
+    // automatically by { once: true }.
+    tryLockLandscape();
+    const lockOnFirstGesture = () => {
+        tryLockLandscape();
+    };
+    window.addEventListener("pointerdown", lockOnFirstGesture, { once: true });
+    window.addEventListener("keydown", lockOnFirstGesture, { once: true });
 
     try {
         await loadAllSamples();

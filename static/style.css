@@ -569,6 +569,235 @@ body {
   .hint { font-size: 12px; padding: 6px 12px; text-align: center; }
 }
 
+/* Touch mode: dual-row fullscreen piano for mobile/touch */
+.touch-piano {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: linear-gradient(180deg, #1c1f30 0%, #0d0f1c 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* The default browser [hidden] rule uses display:none, but our .touch-piano
+   uses display:flex with higher specificity, so we need to re-assert the
+   hidden behavior explicitly. */
+.touch-piano[hidden] {
+  display: none;
+}
+
+.touch-row {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #06070d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.touch-row-label {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.touch-row-keys {
+  flex: 1;
+  --white-count: 1;
+  position: relative;
+  height: 100%;
+  display: flex;
+  background: #06070d;
+  padding: 0;
+  min-height: 0;
+}
+
+/* In touch mode, the original piano + keyboard diagram are hidden so the
+   dual-row touch layout can fill the stage. The footer is also hidden to
+   give the keys as much screen real-estate as possible on phones. */
+body.touch-mode .piano,
+body.touch-mode .keyboard-diagram,
+body.touch-mode .footer {
+  display: none;
+}
+
+body.touch-mode .stage {
+  padding: 10px;
+  gap: 0;
+  justify-content: stretch;
+}
+
+body.touch-mode .topbar {
+  padding: 8px 14px;
+}
+
+body.touch-mode .brand h1 {
+  font-size: 15px;
+}
+
+body.touch-mode .topbar-actions {
+  gap: 12px;
+}
+
+body.touch-mode .toggle {
+  font-size: 12px;
+}
+
+/* In touch mode, hide the keyboard-binding labels on keys — they are
+   keyboard-only hints and just add noise on a touch surface. The note
+   name (C4 etc.) is still shown so players know what they're tapping. */
+body.touch-mode .key-name {
+  display: none !important;
+}
+
+body.touch-mode .key-black .key-shift-hint {
+  display: none !important;
+}
+
+body.touch-mode .key-white {
+  padding: 0 0 10px;
+}
+
+body.touch-mode .key-note {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+}
+
+body.touch-mode .key-black {
+  height: 50%;
+  padding: 0 0 6px;
+}
+
+/* On very short landscape screens (typical phone landscape), keep the two
+   rows but reduce gap so both rows stay usable. */
+@media (max-height: 480px) {
+  body.touch-mode .touch-piano {
+    gap: 4px;
+    padding: 4px;
+  }
+  body.touch-mode .touch-row-label {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+}
+
+/* Rotate hint: shown on mobile when the device is in portrait and the
+   orientation lock didn't take. Pure CSS — only visible on small screens
+   in portrait, on top of the touch-piano. */
+.rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none; /* hidden by default; media query below enables it */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(8, 10, 22, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text);
+  text-align: center;
+}
+
+.rotate-hint-icon {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rotate-hint-phone {
+  display: block;
+  width: 36px;
+  height: 64px;
+  border: 3px solid var(--accent);
+  border-radius: 8px;
+  position: relative;
+  animation: rotate-hint-shake 1.6s ease-in-out infinite;
+}
+.rotate-hint-phone::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.rotate-hint-arrow {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--accent-2);
+  animation: rotate-hint-spin 2s linear infinite;
+}
+
+.rotate-hint-text {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--text);
+}
+.rotate-hint-text span {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+@keyframes rotate-hint-shake {
+  0%, 100% { transform: rotate(0deg); }
+  20%      { transform: rotate(-18deg); }
+  40%      { transform: rotate(18deg); }
+  60%      { transform: rotate(-10deg); }
+  80%      { transform: rotate(10deg); }
+}
+@keyframes rotate-hint-spin {
+  0%   { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Only show the rotate hint on small screens in portrait — the assumption
+   is that on a phone-sized device the piano is best played in landscape.
+   Landscape phones hide it (the layout already adapts). Desktop and
+   tablet sizes never show it. This applies to both touch and normal
+   modes: a phone in portrait is always the wrong orientation for the
+   piano, regardless of which mode the user is in. */
+@media (orientation: portrait) and (max-width: 768px) {
+  .rotate-hint {
+    display: flex;
+  }
+}
+
 /* Animations */
 @keyframes ripple {
   0% { box-shadow: 0 0 0 0 rgba(107, 140, 255, 0.6); }

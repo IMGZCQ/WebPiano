@@ -24,6 +24,11 @@
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span>音名</span>
       </label>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-touch" />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span>触摸模式</span>
+      </label>
       <label class="volume">
         <span>音量</span>
         <input type="range" id="volume" min="0" max="100" value="80" />
@@ -45,6 +50,25 @@
     </div>
 
     <div class="keyboard-diagram" id="keyboard-diagram"></div>
+
+    <div class="touch-piano" id="touch-piano" hidden>
+      <div class="touch-row" data-row="high">
+        <div class="touch-row-keys piano-keys" id="touch-keys-high"></div>
+        <div class="touch-row-label">F4 — C7</div>
+      </div>
+      <div class="touch-row" data-row="low">
+        <div class="touch-row-keys piano-keys" id="touch-keys-low"></div>
+        <div class="touch-row-label">C2 — E4</div>
+      </div>
+    </div>
+
+    <div class="rotate-hint" id="rotate-hint" hidden>
+      <div class="rotate-hint-icon" aria-hidden="true">
+        <span class="rotate-hint-phone"></span>
+        <span class="rotate-hint-arrow">↻</span>
+      </div>
+      <div class="rotate-hint-text">请将设备旋转至横屏<br /><span>为获得最佳弹奏体验</span></div>
+    </div>
   </main>
 
   <footer class="footer">
