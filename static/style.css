@@ -409,11 +409,23 @@ body {
   position: relative;
   cursor: default;
 }
+.kb-key.w09   { flex-basis: calc(var(--u) * .9); }
+.kb-key.w095  { flex-basis: calc(var(--u) * .95); }
 .kb-key.w15   { flex-basis: calc(var(--u) * 1.5); }
+.kb-key.w165   { flex-basis: calc(var(--u) * 1.65); }
+.kb-key.w17  { flex-basis: calc(var(--u) * 1.7); }
 .kb-key.w175  { flex-basis: calc(var(--u) * 1.75); }
 .kb-key.w2    { flex-basis: calc(var(--u) * 2); }
+.kb-key.w205    { flex-basis: calc(var(--u) * 2.05); }
+.kb-key.w21    { flex-basis: calc(var(--u) * 2.1); }
+.kb-key.w215    { flex-basis: calc(var(--u) * 2.15); }
+.kb-key.w22    { flex-basis: calc(var(--u) * 2.2); }
 .kb-key.w225  { flex-basis: calc(var(--u) * 2.25); }
+.kb-key.w23  { flex-basis: calc(var(--u) * 2.3); }
+.kb-key.w235  { flex-basis: calc(var(--u) * 2.35); }
 .kb-key.w275  { flex-basis: calc(var(--u) * 2.75); }
+.kb-key.w28  { flex-basis: calc(var(--u) * 2.8); }
+.kb-key.w285  { flex-basis: calc(var(--u) * 2.85); }
 .kb-key.w125  { flex-basis: calc(var(--u) * 1.25); }
 .kb-key.w625  { flex-basis: calc(var(--u) * 6.25); }
 
@@ -467,7 +479,7 @@ body {
 }
 .kb-key.is-modifier .kb-key-label { color: #c4a8f0; }
 .kb-key-sublabel {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   color: #c4a8f0;
   margin-top: 1px;
@@ -476,7 +488,7 @@ body {
 }
 
 .kb-key-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
   line-height: 1;
@@ -491,13 +503,13 @@ body {
   line-height: 1.1;
 }
 .kb-note-white {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--accent);
   font-weight: 700;
   letter-spacing: 0.2px;
 }
 .kb-note-black {
-  font-size: 9px;
+  font-size: 8px;
   color: rgba(234, 232, 244, 0.7);
   font-weight: 600;
 }

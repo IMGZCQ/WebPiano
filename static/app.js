@@ -6,11 +6,23 @@ const WHITE_COUNT = 36;
 
 // Note layout. Each entry: name, keys (array of supported keys), file, type, whiteIndex.
 // `keys` is a list of normalized key identifiers (see normalizeKey below).
-// For black keys, the first key in the array is the "primary" key used with Ctrl
-// to trigger the sharp note. For white keys, the first key is shown prominently
-// and any additional keys (arrow keys, numpad keys) act as alternative bindings.
+// For black keys, the first key in the array is the "primary" key used with
+// the black-mode modifier (` or Space) to trigger the sharp note. For white
+// keys, the first key is shown prominently and any additional keys (arrow
+// keys, numpad keys) act as alternative bindings.
+//
+// Layout (left → right, low → high):
+//   1-8   → C2..C3
+//   Q-I   → C3..C4
+//   A-K   → C4..C5
+//   Z-,   → C5..C6
+//   0/-/= → C6/D6/E6
+//   P/[/] → F6/G6/A6
+//   ;/'   → B6/C7
+// C3, C4, C5, C6 are shared between adjacent rows (e.g. C3 is 8 and Q).
+// Right-side keys (Arrow* and Numpad*) are kept as secondaries on C4..B6.
 const NOTES = [
-    // Octave 2 (white idx 0..6)
+    // Octave 2 (white idx 0..6) - 1..7 = C2..B2
     { name: "C2", keys: ["1"], file: "a49.mp3", type: "white", whiteIndex: 0 },
     { name: "C#2", keys: ["1"], file: "b49.mp3", type: "black", whiteIndex: 0 },
     { name: "D2", keys: ["2"], file: "a50.mp3", type: "white", whiteIndex: 1 },
@@ -24,64 +36,65 @@ const NOTES = [
     { name: "A#2", keys: ["6"], file: "b54.mp3", type: "black", whiteIndex: 5 },
     { name: "B2", keys: ["7"], file: "a55.mp3", type: "white", whiteIndex: 6 },
 
-    // Octave 3 (white idx 7..13)
-    { name: "C3", keys: ["8"], file: "a56.mp3", type: "white", whiteIndex: 7 },
-    { name: "C#3", keys: ["8"], file: "b56.mp3", type: "black", whiteIndex: 7 },
-    { name: "D3", keys: ["9"], file: "a57.mp3", type: "white", whiteIndex: 8 },
-    { name: "D#3", keys: ["9"], file: "b57.mp3", type: "black", whiteIndex: 8 },
-    { name: "E3", keys: ["0"], file: "a48.mp3", type: "white", whiteIndex: 9 },
-    { name: "F3", keys: ["Q"], file: "a81.mp3", type: "white", whiteIndex: 10 },
-    { name: "F#3", keys: ["Q"], file: "b81.mp3", type: "black", whiteIndex: 10 },
-    { name: "G3", keys: ["W"], file: "a87.mp3", type: "white", whiteIndex: 11 },
-    { name: "G#3", keys: ["W"], file: "b87.mp3", type: "black", whiteIndex: 11 },
-    { name: "A3", keys: ["E"], file: "a69.mp3", type: "white", whiteIndex: 12 },
-    { name: "A#3", keys: ["E"], file: "b69.mp3", type: "black", whiteIndex: 12 },
-    { name: "B3", keys: ["R"], file: "a82.mp3", type: "white", whiteIndex: 13 },
+    // Octave 3 (white idx 7..13) - 8 + Q..U = C3..B3
+    { name: "C3", keys: ["8", "Q"], file: "a56.mp3", type: "white", whiteIndex: 7 },
+    { name: "C#3", keys: ["8", "Q"], file: "b56.mp3", type: "black", whiteIndex: 7 },
+    { name: "D3", keys: ["W"], file: "a57.mp3", type: "white", whiteIndex: 8 },
+    { name: "D#3", keys: ["W"], file: "b57.mp3", type: "black", whiteIndex: 8 },
+    { name: "E3", keys: ["E"], file: "a48.mp3", type: "white", whiteIndex: 9 },
+    { name: "F3", keys: ["R"], file: "a81.mp3", type: "white", whiteIndex: 10 },
+    { name: "F#3", keys: ["R"], file: "b81.mp3", type: "black", whiteIndex: 10 },
+    { name: "G3", keys: ["T"], file: "a87.mp3", type: "white", whiteIndex: 11 },
+    { name: "G#3", keys: ["T"], file: "b87.mp3", type: "black", whiteIndex: 11 },
+    { name: "A3", keys: ["Y"], file: "a69.mp3", type: "white", whiteIndex: 12 },
+    { name: "A#3", keys: ["Y"], file: "b69.mp3", type: "black", whiteIndex: 12 },
+    { name: "B3", keys: ["U"], file: "a82.mp3", type: "white", whiteIndex: 13 },
 
-    // Octave 4 (white idx 14..20) - C4..B4 also bound to arrow keys & numpad
-    { name: "C4", keys: ["T", "ArrowLeft"], file: "a84.mp3", type: "white", whiteIndex: 14 },
-    { name: "C#4", keys: ["T", "ArrowLeft"], file: "b84.mp3", type: "black", whiteIndex: 14 },
-    { name: "D4", keys: ["Y", "ArrowUp"], file: "a89.mp3", type: "white", whiteIndex: 15 },
-    { name: "D#4", keys: ["Y", "ArrowUp"], file: "b89.mp3", type: "black", whiteIndex: 15 },
-    { name: "E4", keys: ["U", "ArrowDown"], file: "a85.mp3", type: "white", whiteIndex: 16 },
-    { name: "F4", keys: ["I", "ArrowRight"], file: "a73.mp3", type: "white", whiteIndex: 17 },
-    { name: "F#4", keys: ["I", "ArrowRight"], file: "b73.mp3", type: "black", whiteIndex: 17 },
-    { name: "G4", keys: ["O", "Numpad0"], file: "a79.mp3", type: "white", whiteIndex: 18 },
-    { name: "G#4", keys: ["O", "Numpad0"], file: "b79.mp3", type: "black", whiteIndex: 18 },
-    { name: "A4", keys: ["P", "NumpadDecimal"], file: "a80.mp3", type: "white", whiteIndex: 19 },
-    { name: "A#4", keys: ["P", "NumpadDecimal"], file: "b80.mp3", type: "black", whiteIndex: 19 },
-    { name: "B4", keys: ["A", "NumpadEnter"], file: "a65.mp3", type: "white", whiteIndex: 20 },
+    // Octave 4 (white idx 14..20) - I+A / S / D / F / G / H / J = C4..B4
+    // Arrow keys (Left/Down/Right/Up) stay bound to C4..F4.
+    { name: "C4", keys: ["I", "A", "ArrowLeft"], file: "a84.mp3", type: "white", whiteIndex: 14 },
+    { name: "C#4", keys: ["I", "A", "ArrowLeft"], file: "b84.mp3", type: "black", whiteIndex: 14 },
+    { name: "D4", keys: ["S", "ArrowDown"], file: "a89.mp3", type: "white", whiteIndex: 15 },
+    { name: "D#4", keys: ["S", "ArrowDown"], file: "b89.mp3", type: "black", whiteIndex: 15 },
+    { name: "E4", keys: ["D", "ArrowRight"], file: "a85.mp3", type: "white", whiteIndex: 16 },
+    { name: "F4", keys: ["F", "ArrowUp"], file: "a73.mp3", type: "white", whiteIndex: 17 },
+    { name: "F#4", keys: ["F", "ArrowUp"], file: "b73.mp3", type: "black", whiteIndex: 17 },
+    { name: "G4", keys: ["G", "Numpad0"], file: "a79.mp3", type: "white", whiteIndex: 18 },
+    { name: "G#4", keys: ["G", "Numpad0"], file: "b79.mp3", type: "black", whiteIndex: 18 },
+    { name: "A4", keys: ["H", "NumpadDecimal"], file: "a80.mp3", type: "white", whiteIndex: 19 },
+    { name: "A#4", keys: ["H", "NumpadDecimal"], file: "b80.mp3", type: "black", whiteIndex: 19 },
+    { name: "B4", keys: ["J", "NumpadEnter"], file: "a65.mp3", type: "white", whiteIndex: 20 },
 
-    // Octave 5 (white idx 21..27) - C5..B5 also bound to numpad digits
-    { name: "C5", keys: ["S", "Numpad1"], file: "a83.mp3", type: "white", whiteIndex: 21 },
-    { name: "C#5", keys: ["S", "Numpad1"], file: "b83.mp3", type: "black", whiteIndex: 21 },
-    { name: "D5", keys: ["D", "Numpad2"], file: "a68.mp3", type: "white", whiteIndex: 22 },
-    { name: "D#5", keys: ["D", "Numpad2"], file: "b68.mp3", type: "black", whiteIndex: 22 },
-    { name: "E5", keys: ["F", "Numpad3"], file: "a70.mp3", type: "white", whiteIndex: 23 },
-    { name: "F5", keys: ["G", "Numpad4"], file: "a71.mp3", type: "white", whiteIndex: 24 },
-    { name: "F#5", keys: ["G", "Numpad4"], file: "b71.mp3", type: "black", whiteIndex: 24 },
-    { name: "G5", keys: ["H", "Numpad5"], file: "a72.mp3", type: "white", whiteIndex: 25 },
-    { name: "G#5", keys: ["H", "Numpad5"], file: "b72.mp3", type: "black", whiteIndex: 25 },
-    { name: "A5", keys: ["J", "Numpad6"], file: "a74.mp3", type: "white", whiteIndex: 26 },
-    { name: "A#5", keys: ["J", "Numpad6"], file: "b74.mp3", type: "black", whiteIndex: 26 },
-    { name: "B5", keys: ["K", "Numpad7"], file: "a75.mp3", type: "white", whiteIndex: 27 },
+    // Octave 5 (white idx 21..27) - K+Z / X / C / V / B / N / M = C5..B5
+    { name: "C5", keys: ["K", "Z", "Numpad1"], file: "a83.mp3", type: "white", whiteIndex: 21 },
+    { name: "C#5", keys: ["K", "Z", "Numpad1"], file: "b83.mp3", type: "black", whiteIndex: 21 },
+    { name: "D5", keys: ["X", "Numpad2"], file: "a68.mp3", type: "white", whiteIndex: 22 },
+    { name: "D#5", keys: ["X", "Numpad2"], file: "b68.mp3", type: "black", whiteIndex: 22 },
+    { name: "E5", keys: ["C", "Numpad3"], file: "a70.mp3", type: "white", whiteIndex: 23 },
+    { name: "F5", keys: ["V", "Numpad4"], file: "a71.mp3", type: "white", whiteIndex: 24 },
+    { name: "F#5", keys: ["V", "Numpad4"], file: "b71.mp3", type: "black", whiteIndex: 24 },
+    { name: "G5", keys: ["B", "Numpad5"], file: "a72.mp3", type: "white", whiteIndex: 25 },
+    { name: "G#5", keys: ["B", "Numpad5"], file: "b72.mp3", type: "black", whiteIndex: 25 },
+    { name: "A5", keys: ["N", "Numpad6"], file: "a74.mp3", type: "white", whiteIndex: 26 },
+    { name: "A#5", keys: ["N", "Numpad6"], file: "b74.mp3", type: "black", whiteIndex: 26 },
+    { name: "B5", keys: ["M", "Numpad7"], file: "a75.mp3", type: "white", whiteIndex: 27 },
 
-    // Octave 6 (white idx 28..33) - C6..B6 also bound to numpad 8/9/+/Num///*/-
-    { name: "C6", keys: ["L", "Numpad8"], file: "a76.mp3", type: "white", whiteIndex: 28 },
-    { name: "C#6", keys: ["L", "Numpad8"], file: "b76.mp3", type: "black", whiteIndex: 28 },
-    { name: "D6", keys: ["Z", "Numpad9"], file: "a90.mp3", type: "white", whiteIndex: 29 },
-    { name: "D#6", keys: ["Z", "Numpad9"], file: "b90.mp3", type: "black", whiteIndex: 29 },
-    { name: "E6", keys: ["X", "NumpadAdd"], file: "a88.mp3", type: "white", whiteIndex: 30 },
-    { name: "F6", keys: ["C", "NumLock"], file: "a67.mp3", type: "white", whiteIndex: 31 },
-    { name: "F#6", keys: ["C", "NumLock"], file: "b67.mp3", type: "black", whiteIndex: 31 },
-    { name: "G6", keys: ["V", "NumpadDivide"], file: "a86.mp3", type: "white", whiteIndex: 32 },
-    { name: "G#6", keys: ["V", "NumpadDivide"], file: "b86.mp3", type: "black", whiteIndex: 32 },
-    { name: "A6", keys: ["B", "NumpadMultiply"], file: "a66.mp3", type: "white", whiteIndex: 33 },
-    { name: "A#6", keys: ["B", "NumpadMultiply"], file: "b66.mp3", type: "black", whiteIndex: 33 },
-    { name: "B6", keys: ["N", "NumpadSubtract"], file: "a78.mp3", type: "white", whiteIndex: 34 },
+    // Octave 6 (white idx 28..34) - 0+, / - / = / P / [ / ] / ; = C6..B6
+    { name: "C6", keys: ["0", ",", "Numpad8"], file: "a76.mp3", type: "white", whiteIndex: 28 },
+    { name: "C#6", keys: ["0", ",", "Numpad8"], file: "b76.mp3", type: "black", whiteIndex: 28 },
+    { name: "D6", keys: ["-", "Numpad9"], file: "a90.mp3", type: "white", whiteIndex: 29 },
+    { name: "D#6", keys: ["-", "Numpad9"], file: "b90.mp3", type: "black", whiteIndex: 29 },
+    { name: "E6", keys: ["=", "NumpadAdd"], file: "a88.mp3", type: "white", whiteIndex: 30 },
+    { name: "F6", keys: ["P", "NumLock"], file: "a67.mp3", type: "white", whiteIndex: 31 },
+    { name: "F#6", keys: ["P", "NumLock"], file: "b67.mp3", type: "black", whiteIndex: 31 },
+    { name: "G6", keys: ["[", "NumpadDivide"], file: "a86.mp3", type: "white", whiteIndex: 32 },
+    { name: "G#6", keys: ["[", "NumpadDivide"], file: "b86.mp3", type: "black", whiteIndex: 32 },
+    { name: "A6", keys: ["]", "NumpadMultiply"], file: "a66.mp3", type: "white", whiteIndex: 33 },
+    { name: "A#6", keys: ["]", "NumpadMultiply"], file: "b66.mp3", type: "black", whiteIndex: 33 },
+    { name: "B6", keys: [";", "NumpadSubtract"], file: "a78.mp3", type: "white", whiteIndex: 34 },
 
-    // Octave 7 (white idx 35)
-    { name: "C7", keys: ["M"], file: "a77.mp3", type: "white", whiteIndex: 35 },
+    // Octave 7 (white idx 35) - ' = C7
+    { name: "C7", keys: ["'"], file: "a77.mp3", type: "white", whiteIndex: 35 },
 ];
 
 // Map internal normalized key identifiers to user-friendly display glyphs.
@@ -127,6 +140,17 @@ function normalizeKey(e) {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight" ||
         e.key === "ArrowUp" || e.key === "ArrowDown") return e.key;
     if (e.code === "NumLock") return "NumLock";
+    // Symbol keys (,-=[];' ) — use e.code because e.key changes with shift
+    // (e.g. Shift+= produces e.key "+" on US layouts).
+    switch (e.code) {
+        case "Comma": return ",";
+        case "Minus": return "-";
+        case "Equal": return "=";
+        case "BracketLeft": return "[";
+        case "BracketRight": return "]";
+        case "Semicolon": return ";";
+        case "Quote": return "'";
+    }
     return null;
 }
 
@@ -151,7 +175,7 @@ const KB_MAIN_LAYOUT = [
         { id: "Digit0", label: "0", w: 1 },
         { id: "Minus", label: "-", w: 1 },
         { id: "Equal", label: "=", w: 1 },
-        { id: "Backspace", label: "Bksp", w: 2, subLabel: "黑键" },
+        { id: "Backspace", label: "退格键", w: 2.85 },
         { id: "NumLock", label: "Num", w: 1 },
         { id: "NumpadDivide", label: "/", w: 1 },
         { id: "NumpadMultiply", label: "*", w: 1 },
@@ -172,7 +196,7 @@ const KB_MAIN_LAYOUT = [
         { id: "KeyP", label: "P", w: 1 },
         { id: "BracketLeft", label: "[", w: 1 },
         { id: "BracketRight", label: "]", w: 1 },
-        { id: "Backslash", label: "\\", w: 2 },
+        { id: "Backslash", label: "\\", w: 2.35 },
         { id: "Numpad7", label: "7", w: 1 },
         { id: "Numpad8", label: "8", w: 1 },
         { id: "Numpad9", label: "9", w: 1 },
@@ -192,7 +216,7 @@ const KB_MAIN_LAYOUT = [
         { id: "KeyL", label: "L", w: 1 },
         { id: "Semicolon", label: ";", w: 1 },
         { id: "Quote", label: "'", w: 1 },
-        { id: "Enter", label: "Enter", w: 2, rowSpan: 1 },
+        { id: "Enter", label: "Enter", w: 2.1, rowSpan: 1 },
         { id: "", label: "", w: 1 },
         { id: "Numpad4", label: "4", w: 1 },
         { id: "Numpad5", label: "5", w: 1 },
@@ -211,9 +235,9 @@ const KB_MAIN_LAYOUT = [
         { id: "Comma", label: ",", w: 1 },
         { id: "Period", label: ".", w: 1 },
         { id: "Slash", label: "/", w: 1 },
-        { id: "ShiftRight", label: "Shift", w: 1 },
+        { id: "ShiftRight", label: "Shift", w: 1.65 },
         { id: "ArrowUp", label: "↑", w: 1 },
-        { id: "", label: "", w: 2 },
+        { id: "", label: "", w: 0.95 },
         { id: "Numpad1", label: "1", w: 1 },
         { id: "Numpad2", label: "2", w: 1 },
         { id: "Numpad3", label: "3", w: 1 },
@@ -221,22 +245,18 @@ const KB_MAIN_LAYOUT = [
     ],
     // Row 5: Ctrl Win Alt Space Alt Win Menu Ctrl
     [
-        { id: "ControlLeft", label: "Ctrl", w: 1.25 },
-        { id: "MetaLeft", label: "Win", w: 1.25 },
-        { id: "AltLeft", label: "Alt", w: 1.25 },
-        { id: "Space", label: "", w: 3 },
-        { id: "Space", label: "", w: 3 },
-        { id: "Space", label: "", w: 3 },
-        { id: "Space", label: "", w: 1 },
-        { id: "AltRight", label: "Alt", w: 1.25 },
-        { id: "MetaRight", label: "Win", w: 1.25 },
-        { id: "ContextMenu", label: "Menu", w: 1.25 },
-        { id: "ControlRight", label: "Ctrl", w: 1.25 },
+        { id: "ControlLeft", label: "Ctrl", w: 1 },
+        { id: "MetaLeft", label: "Win", w: 1 },
+        { id: "AltLeft", label: "Alt", w: 1 },
+        { id: "Space", label: "", w: 6.25, subLabel: "空格 黑键辅助" },
+        { id: "AltRight", label: "Alt", w: 1 },
+        { id: "MetaRight", label: "Win", w: 1 },
+        { id: "ContextMenu", label: "Menu", w: 1 },
+        { id: "ControlRight", label: "Ctrl", w: 1 },
         { id: "ArrowLeft", label: "←", w: 1 },
         { id: "ArrowDown", label: "↓", w: 1 },
         { id: "ArrowRight", label: "→", w: 1 },
-        { id: "", label: "", w: 1 },
-        { id: "Numpad0", label: "0", w: 2 },
+        { id: "Numpad0", label: "0", w: 1.75 },
         { id: "NumpadDecimal", label: ".", w: 1.25 },
     ],
 ];
@@ -250,6 +270,10 @@ const KB_ID_TO_NORM = {
     KeyA: "A", KeyS: "S", KeyD: "D", KeyF: "F", KeyG: "G", KeyH: "H",
     KeyJ: "J", KeyK: "K", KeyL: "L",
     KeyZ: "Z", KeyX: "X", KeyC: "C", KeyV: "V", KeyB: "B", KeyN: "N", KeyM: "M",
+    Comma: ",", Period: ".", Slash: "/",
+    Minus: "-", Equal: "=",
+    BracketLeft: "[", BracketRight: "]", Backslash: "\\",
+    Semicolon: ";", Quote: "'",
     ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
     ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight",
     NumLock: "NumLock",
@@ -303,7 +327,7 @@ function makeKbKeyEl(keyDef, keyToNotes) {
     const el = document.createElement("div");
     el.className = "kb-key";
     el.dataset.kbId = keyDef.id;
-    const wKey = "w" + String(keyDef.w).replace(".", "_");
+    const wKey = "w" + String(keyDef.w).replace(".", "");
     el.classList.add(wKey);
     if (keyDef.rowSpan && keyDef.rowSpan > 1) {
         el.classList.add("row-span-" + keyDef.rowSpan);
@@ -329,7 +353,7 @@ function makeKbKeyEl(keyDef, keyToNotes) {
         const wrap = document.createElement("span");
         wrap.className = "kb-key-notes";
         // Show white note first, then black note (with ` prefix indicating
-        // that the black key is triggered by holding ` or Backspace).
+        // that the black key is triggered by holding ` or Space).
         notes.forEach((n) => {
             const nspan = document.createElement("span");
             nspan.className = n.type === "black" ? "kb-note-black" : "kb-note-white";
@@ -339,7 +363,7 @@ function makeKbKeyEl(keyDef, keyToNotes) {
         el.appendChild(wrap);
 
         // Clicking a diagram key triggers the bound note (white by default,
-        // black note when the black-mode enable key — ` or Backspace — is held).
+        // black note when the black-mode enable key — ` or Space — is held).
         el.addEventListener("mousedown", (ev) => {
             ev.preventDefault();
             let note = null;
@@ -574,11 +598,11 @@ const lastPressAt = new Map();
 const REPEAT_COOLDOWN_MS = 110;
 // Black-key "modifier" is held-key based instead of a real modifier to avoid
 // collisions with the OS / browser menu shortcuts. Hold ` (backtick) or
-// Backspace while pressing a key to trigger that key's black note.
+// Space while pressing a key to trigger that key's black note.
 const blackModeKeys = new Set();
 
 function isBlackModeActive() {
-    return blackModeKeys.has("`") || blackModeKeys.has("Backspace");
+    return blackModeKeys.has("`") || blackModeKeys.has("Space");
 }
 
 // Look up the note triggered by a key, preferring the black variant when
@@ -603,8 +627,8 @@ window.addEventListener("keydown", (e) => {
         e.preventDefault();
         return;
     }
-    if (e.key === "Backspace") {
-        blackModeKeys.add("Backspace");
+    if (e.code === "Space") {
+        blackModeKeys.add("Space");
         e.preventDefault();
         return;
     }
@@ -635,8 +659,8 @@ window.addEventListener("keyup", (e) => {
         blackModeKeys.delete("`");
         return;
     }
-    if (e.key === "Backspace") {
-        blackModeKeys.delete("Backspace");
+    if (e.code === "Space") {
+        blackModeKeys.delete("Space");
         return;
     }
     const key = normalizeKey(e);
