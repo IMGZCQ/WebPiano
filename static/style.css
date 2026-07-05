@@ -682,7 +682,7 @@ body.touch-mode .key-note {
 }
 
 body.touch-mode .key-black {
-  height: 50%;
+  height: 60%;
   padding: 0 0 6px;
 }
 
@@ -811,8 +811,8 @@ body.touch-mode .touch-row-keys .key-black {
     left: auto !important;
     right: 0 !important;
     top: calc(var(--bk-start, 0%) - var(--bk-half, 0%)) !important;
-    width: 55% !important;
-    height: 4% !important;
+    width: 60% !important;
+    height: 3.5% !important;
   }
 
   /* Note label: rotate to read along the long axis of each key and pin
