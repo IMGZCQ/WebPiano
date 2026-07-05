@@ -806,3 +806,30 @@ body.touch-mode .key-black {
 .key-white.active {
   animation: ripple 0.4s ease-out;
 }
+
+/* Rainbow mode: each white-key pitch class (C/D/E/F/G/A/B) gets a soft
+   pastel color. Black keys keep their dark fill so the visual rhythm of
+   the keyboard is preserved. The note-name label at the bottom of the
+   key inherits a darker variant of the same hue for legibility. */
+body.rainbow-mode .key-white[data-name^="C"] { background: linear-gradient(180deg, #ffb3b3 0%, #ff8b8b 100%); border-color: #e57373; }
+body.rainbow-mode .key-white[data-name^="D"] { background: linear-gradient(180deg, #ffd6a3 0%, #ffb570 100%); border-color: #e0945a; }
+body.rainbow-mode .key-white[data-name^="E"] { background: linear-gradient(180deg, #fff3a3 0%, #ffe066 100%); border-color: #d4b942; }
+body.rainbow-mode .key-white[data-name^="F"] { background: linear-gradient(180deg, #b8f0c8 0%, #87e5a3 100%); border-color: #5cb876; }
+body.rainbow-mode .key-white[data-name^="G"] { background: linear-gradient(180deg, #b3eced 0%, #6fd9d9 100%); border-color: #4cb0b0; }
+body.rainbow-mode .key-white[data-name^="A"] { background: linear-gradient(180deg, #b8d4f5 0%, #7aafe6 100%); border-color: #4f87c6; }
+body.rainbow-mode .key-white[data-name^="B"] { background: linear-gradient(180deg, #e2c4f0 0%, #c792ea 100%); border-color: #a26fc4; }
+
+body.rainbow-mode .key-white[data-name^="C"] .key-note { color: #b73a3a; }
+body.rainbow-mode .key-white[data-name^="D"] .key-note { color: #b86a25; }
+body.rainbow-mode .key-white[data-name^="E"] .key-note { color: #a08620; }
+body.rainbow-mode .key-white[data-name^="F"] .key-note { color: #2f8a52; }
+body.rainbow-mode .key-white[data-name^="G"] .key-note { color: #2a8080; }
+body.rainbow-mode .key-white[data-name^="A"] .key-note { color: #2e5a96; }
+body.rainbow-mode .key-white[data-name^="B"] .key-note { color: #6e3d96; }
+
+body.rainbow-mode .key-white.active {
+  filter: brightness(1.08) saturate(1.15);
+}
+body.rainbow-mode .key-black.active {
+  filter: brightness(1.4);
+}

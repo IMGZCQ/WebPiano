@@ -908,6 +908,23 @@ touchModeEl.addEventListener("change", () => {
     try { localStorage.setItem(TOUCH_MODE_KEY, on ? "1" : "0"); } catch (_) {}
 });
 
+// ---------- Rainbow mode ----------
+// When on, each white-key pitch class (C/D/E/F/G/A/B) gets a soft pastel
+// color. Driven by a body class so all three keyboards (main, touch
+// high, touch low) recolor at once. The toggle state is persisted.
+const RAINBOW_KEY = "fnpiano.rainbow";
+const rainbowModeEl = document.getElementById("toggle-rainbow");
+
+function setRainbowMode(on) {
+    document.body.classList.toggle("rainbow-mode", on);
+}
+
+rainbowModeEl.addEventListener("change", () => {
+    const on = rainbowModeEl.checked;
+    setRainbowMode(on);
+    try { localStorage.setItem(RAINBOW_KEY, on ? "1" : "0"); } catch (_) {}
+});
+
 // ---------- Init ----------
 (async function init() {
     renderPiano();
@@ -945,6 +962,14 @@ touchModeEl.addEventListener("change", () => {
     };
     window.addEventListener("pointerdown", lockOnFirstGesture, { once: true });
     window.addEventListener("keydown", lockOnFirstGesture, { once: true });
+
+    // Restore the saved rainbow-mode preference. Default off.
+    let savedRainbow = null;
+    try { savedRainbow = localStorage.getItem(RAINBOW_KEY); } catch (_) {}
+    if (savedRainbow === "1") {
+        rainbowModeEl.checked = true;
+        setRainbowMode(true);
+    }
 
     try {
         await loadAllSamples();
