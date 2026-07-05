@@ -562,7 +562,6 @@ body {
 }
 @media (max-width: 600px) {
   .piano-keys { height: 170px; }
-  .key-name, .key-note { display: none; }
   .piano-tip { display: none; }
   .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }
   .topbar-actions { width: 100%; justify-content: space-between; }
