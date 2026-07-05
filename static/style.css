@@ -780,9 +780,8 @@ body.touch-mode .touch-row-keys .key-black {
     flex-direction: column;
   }
   body.touch-mode .touch-row-label {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    font-size: 10px;
+    margin-left: 20px;
+    font-size: 12px;
     letter-spacing: 2px;
   }
 
@@ -824,9 +823,9 @@ body.touch-mode .touch-row-keys .key-black {
   body.touch-mode .key-note {
     writing-mode: vertical-rl;
     align-self: flex-start;
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 800;
-    letter-spacing: 3px;
+    letter-spacing: 1px;
   }
 }
 
