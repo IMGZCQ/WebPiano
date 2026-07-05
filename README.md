@@ -204,7 +204,10 @@ sha256sum -c webpiano-linux-amd64.sha256
 ***
 
 ## 🎹 运行界面
-<img width="1094" height="559" alt="PixPin_2026-06-30_02-48-13" src="https://github.com/user-attachments/assets/3d3338a5-eaf4-4b61-8114-026b8ef57f99" />
+<img width="1073" height="572" alt="PC" src="https://github.com/user-attachments/assets/59e00c71-54aa-4f3b-849d-f1d9c315a4f8" />
+<img width="1073" height="572" alt="PcC" src="https://github.com/user-attachments/assets/0223a788-3062-4272-a97f-09e55ecd7ed4" />
+<img width="1072" height="542" alt="mobile webp" src="https://github.com/user-attachments/assets/cf38397f-fb68-4136-9ae9-07f95d0476ff" />
+<img width="1073" height="572" alt="mobileC" src="https://github.com/user-attachments/assets/ac7a4039-49ed-46a5-b65f-f0ebb458f5d9" />
 
 
 ## 📁 目录结构
