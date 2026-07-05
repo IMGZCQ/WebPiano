@@ -550,8 +550,15 @@ function renderTouchRow(container, startName, endName) {
             el.dataset.name = n.name;
             el.dataset.type = "black";
             const localWhiteIndex = n.whiteIndex - baseWhiteIndex;
-            el.style.left = `calc(${(localWhiteIndex + 1) * whiteWidth}% - ${blackWidth / 2}%)`;
-            el.style.width = `${blackWidth}%`;
+            // Express the black-key offset as a CSS custom property so the
+            // same value drives `left` in landscape and `top` in portrait.
+            // The offset is the boundary between two white keys minus half
+            // the black key's own size, so the key is centered on the gap.
+            const offsetPct = (localWhiteIndex + 1) * whiteWidth;
+            const halfBlackPct = blackWidth / 2;
+            el.style.setProperty("--bk-start", `${offsetPct}%`);
+            el.style.setProperty("--bk-half", `${halfBlackPct}%`);
+            el.style.setProperty("--bk-size", `${blackWidth}%`);
             el.innerHTML = `<span class="key-shift-hint">\`${displayKey(n.keys[0])}</span>`;
             container.appendChild(el);
         });
@@ -873,23 +880,10 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPod|Opera Mini/i.test(navigator.userAgent || "");
 }
 
-// Try to lock the device into landscape so the piano always sits on the
-// long edge of the screen. Chrome on Android refuses orientation.lock()
-// unless it runs inside a user gesture, so we attempt on load and retry
-// on the first pointerdown / keydown. On browsers / platforms that don't
-// support the API (notably iOS Safari in a regular tab) we silently give
-// up and let the user rotate manually.
-function tryLockLandscape() {
-    if (!isMobileDevice()) return;
-    if (typeof screen === "undefined" || !screen.orientation ||
-        typeof screen.orientation.lock !== "function") return;
-    try {
-        const p = screen.orientation.lock("landscape");
-        if (p && typeof p.catch === "function") {
-            p.catch(() => { /* ignore — will retry on next gesture */ });
-        }
-    } catch (_) { /* not supported / not allowed */ }
-}
+// No more auto-rotate. The dual-row piano now adapts to the current
+// orientation via CSS (portrait → 2 columns of vertical keys, landscape
+// → 2 stacked rows of horizontal keys), so we just leave the device
+// alone and let the layout respond.
 
 function setTouchMode(on) {
     if (on) {
@@ -952,16 +946,9 @@ rainbowModeEl.addEventListener("change", () => {
         setTouchMode(true);
     }
 
-    // Try to force landscape on mobile so the piano sits on the long edge.
-    // Chrome on Android needs this to happen inside a user gesture, so we
-    // also retry on the first pointerdown. The one-shot listener is removed
-    // automatically by { once: true }.
-    tryLockLandscape();
-    const lockOnFirstGesture = () => {
-        tryLockLandscape();
-    };
-    window.addEventListener("pointerdown", lockOnFirstGesture, { once: true });
-    window.addEventListener("keydown", lockOnFirstGesture, { once: true });
+    // No auto-rotate anymore. The dual-row touch piano adapts to whatever
+    // orientation the device is in (portrait → 2 columns, landscape → 2
+    // rows), so we just leave the screen alone.
 
     // Restore the saved rainbow-mode preference. Default off.
     let savedRainbow = null;

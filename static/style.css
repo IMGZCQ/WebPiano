@@ -687,6 +687,18 @@ body.touch-mode .key-black {
   padding: 0 0 6px;
 }
 
+/* In touch mode the dual-row renderTouchRow() helper sets three CSS
+   custom properties on each black key: --bk-start (the offset of the
+   boundary between two white keys, as a % of the row width), --bk-half
+   (half the black key's own width), and --bk-size (the black key's
+   width). In landscape we drive `left` from those, in portrait we drive
+   `top` instead — see the @media block below. */
+body.touch-mode .touch-row-keys .key-black {
+  left: calc(var(--bk-start, 0%) - var(--bk-half, 0%));
+  top: 0;
+  width: var(--bk-size, 6%);
+}
+
 /* On very short landscape screens (typical phone landscape), keep the two
    rows but reduce gap so both rows stay usable. */
 @media (max-height: 480px) {
@@ -700,101 +712,122 @@ body.touch-mode .key-black {
   }
 }
 
-/* Rotate hint: shown on mobile when the device is in portrait and the
-   orientation lock didn't take. Pure CSS — only visible on small screens
-   in portrait, on top of the touch-piano. */
-.rotate-hint {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: none; /* hidden by default; media query below enables it */
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 24px;
-  background: rgba(8, 10, 22, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: var(--text);
-  text-align: center;
-}
-
-.rotate-hint-icon {
-  position: relative;
-  width: 88px;
-  height: 88px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.rotate-hint-phone {
-  display: block;
-  width: 36px;
-  height: 64px;
-  border: 3px solid var(--accent);
-  border-radius: 8px;
-  position: relative;
-  animation: rotate-hint-shake 1.6s ease-in-out infinite;
-}
-.rotate-hint-phone::after {
-  content: "";
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.rotate-hint-arrow {
-  position: absolute;
-  right: -2px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 38px;
-  font-weight: 700;
-  color: var(--accent-2);
-  animation: rotate-hint-spin 2s linear infinite;
-}
-
-.rotate-hint-text {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.6;
-  color: var(--text);
-}
-.rotate-hint-text span {
-  display: block;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-dim);
-  margin-top: 4px;
-}
-
-@keyframes rotate-hint-shake {
-  0%, 100% { transform: rotate(0deg); }
-  20%      { transform: rotate(-18deg); }
-  40%      { transform: rotate(18deg); }
-  60%      { transform: rotate(-10deg); }
-  80%      { transform: rotate(10deg); }
-}
-@keyframes rotate-hint-spin {
-  0%   { transform: translateY(-50%) rotate(0deg); }
-  100% { transform: translateY(-50%) rotate(360deg); }
-}
-
-/* Only show the rotate hint on small screens in portrait — the assumption
-   is that on a phone-sized device the piano is best played in landscape.
-   Landscape phones hide it (the layout already adapts). Desktop and
-   tablet sizes never show it. This applies to both touch and normal
-   modes: a phone in portrait is always the wrong orientation for the
-   piano, regardless of which mode the user is in. */
+/* Portrait phones: keep the dual-row touch piano, but lay it out as two
+   side-by-side columns of vertical keys instead of stacked rows. The
+   layout is mirrored top↔bottom vs. the landscape version, so the lower
+   range (C2–E4) sits on the left and the higher range (F4–C7) on the
+   right. White keys stretch full column width with equal vertical share;
+   black keys are anchored to the right edge of their parent white key
+   with 60% of its height, matching the visual rhythm of a real piano
+   viewed from the side. The whole topbar group is also pulled to the
+   right edge as a narrow column so the piano gets the long edge. */
 @media (orientation: portrait) and (max-width: 768px) {
-  .rotate-hint {
-    display: flex;
+  body.touch-mode .topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 56px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 6px;
+    z-index: 5;
+    border-bottom: none;
+    border-left: 1px solid var(--border);
+  }
+  body.touch-mode .topbar-actions {
+    gap: 18px;
+  }
+  body.touch-mode .topbar h1 {
+    display: none;
+  }
+  body.touch-mode .topbar .toggle,
+  body.touch-mode .topbar .volume {
+    flex-direction: column;
+    gap: 12px;
+    font-size: 12px;
+    transform: rotate(180deg);
+  }
+  body.touch-mode .topbar .toggle-track {
+    transform: rotate(90deg);
+  }
+  body.touch-mode .topbar .toggle span:last-child,
+  body.touch-mode .topbar .volume span:first-child {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+  }
+  body.touch-mode .topbar .volume input[type="range"] {
+    width: 120px !important;
+    transform: rotate(90deg);
+  }
+
+  body.touch-mode .stage {
+    padding: 0;
+    padding-right: 56px; /* leave room for the rotated topbar */
+  }
+
+  body.touch-mode .touch-piano {
+    flex-direction: row-reverse; /* high range on the left, low on the right */
+    height: 100%;
+  }
+  body.touch-mode .touch-row {
+    flex: 1 1 0;
+    width: auto;
+    max-width: none;
+  }
+  body.touch-mode .touch-row-keys {
+    flex-direction: column;
+  }
+  body.touch-mode .touch-row-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 10px;
+    letter-spacing: 2px;
+  }
+
+  /* White keys: full column width, equal vertical share. The existing
+     landscape flex sizing uses flex: 0 0 calc(100% / var(--white-count))
+     so we override width/height here. align-items → flex-start keeps the
+     note label against the left edge of the key (away from the black
+     key column on the right). */
+  body.touch-mode .touch-row-keys .key-white {
+    width: 100% !important;
+    height: calc(100% / var(--white-count)) !important;
+    flex: 0 0 calc(100% / var(--white-count)) !important;
+    align-items: flex-start !important;
+    padding: 6px 0 6px 8px !important;
+  }
+
+  /* Black keys: anchor to the right edge of the parent white key, drive
+     their vertical position from --bk-start (the same offset the
+     landscape layout uses for `left`). The black key is centered on the
+     boundary between two white keys, so it visually "belongs" to both
+     — matching the way sharps/flats sit between naturals on a real
+     piano keyboard, just rotated 90°. In portrait the key is a wide,
+     short sliver anchored to the right edge of the column: 50% of the
+     column width and only 4% of the column height, so it reads as a
+     thin horizontal bar at the boundary between two white keys. */
+  body.touch-mode .touch-row-keys .key-black {
+    left: auto !important;
+    right: 0 !important;
+    top: calc(var(--bk-start, 0%) - var(--bk-half, 0%)) !important;
+    width: 55% !important;
+    height: 4% !important;
+  }
+
+  /* Note label: rotate to read along the long axis of each key and pin
+     it to the left edge of the white key (the side away from the black
+     key column). The text reads top→bottom (the natural reading order
+     when the head is tilted to the right) so it's instantly readable
+     without the 180° flip that landscape touch mode uses. */
+  body.touch-mode .key-note {
+    writing-mode: vertical-rl;
+    align-self: flex-start;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 3px;
   }
 }
 
