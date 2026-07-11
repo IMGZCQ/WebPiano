@@ -20,6 +20,10 @@ func FileServer(root string) http.Handler {
 		switch {
 		case isAudioPath(clean):
 			w.Header().Set("Cache-Control", "public, max-age=86400")
+		case isSoundfontPath(clean):
+			// SoundFont files inline the audio samples as base64 and only
+			// change on app upgrades; cache them like audio assets.
+			w.Header().Set("Cache-Control", "public, max-age=86400")
 		case isAssetPath(clean):
 			// JS/CSS change often; force revalidation.
 			w.Header().Set("Cache-Control", "no-cache")
@@ -34,7 +38,17 @@ func isAudioPath(p string) bool {
 	return strings.HasSuffix(p, ".mp3") ||
 		strings.HasSuffix(p, ".ogg") ||
 		strings.HasSuffix(p, ".wav") ||
-		strings.HasSuffix(p, ".flac")
+		strings.HasSuffix(p, ".flac") ||
+		strings.HasSuffix(p, ".mid") ||
+		strings.HasSuffix(p, ".midi")
+}
+
+// isSoundfontPath matches the inline-base64 MusyngKite SoundFont files we
+// ship under static/soundfonts/. They look like static JS to the file
+// server, but semantically they are audio sample bundles and should be
+// cached like the audio assets above.
+func isSoundfontPath(p string) bool {
+	return strings.HasPrefix(p, "/soundfonts/") && strings.HasSuffix(p, ".js")
 }
 
 func isAssetPath(p string) bool {
