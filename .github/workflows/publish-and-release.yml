@@ -133,41 +133,61 @@ jobs:
           go-version: '1.26.1'
           cache: false
 
-      - name: 交叉编译全平台二进制（注入版本号）
+      # ========== 此处全部替换成打包逻辑，其余不动 ==========
+      - name: 交叉编译全平台二进制并打包（附带static目录）
         run: |
           VERSION=${{ needs.get-version.outputs.ver }}
           LDFLAGS="-s -w -X main.Version=$VERSION"
+          mkdir -p dist
 
-          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-linux-amd64 main.go
-          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o webpiano-linux-arm64 main.go
-          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-windows-amd64.exe main.go
-          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o webpiano-darwin-amd64 main.go
-          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o webpiano-darwin-arm64 main.go
+          # Windows amd64 → zip
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/webpiano-windows-amd64.exe main.go
+          cp -r static dist/
+          cd dist && zip -r ../webpiano-windows-amd64.zip . && cd ..
+          rm -rf dist/*
 
+          # Linux amd64 → tar.gz
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/webpiano-linux-amd64 main.go
+          cp -r static dist/
+          cd dist && tar -czf ../webpiano-linux-amd64.tar.gz . && cd ..
+          rm -rf dist/*
+
+          # Linux arm64 → tar.gz
+          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/webpiano-linux-arm64 main.go
+          cp -r static dist/
+          cd dist && tar -czf ../webpiano-linux-arm64.tar.gz . && cd ..
+          rm -rf dist/*
+
+          # Darwin amd64 → tar.gz
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/webpiano-darwin-amd64 main.go
+          cp -r static dist/
+          cd dist && tar -czf ../webpiano-darwin-amd64.tar.gz . && cd ..
+          rm -rf dist/*
+
+          # Darwin arm64 → tar.gz
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/webpiano-darwin-arm64 main.go
+          cp -r static dist/
+          cd dist && tar -czf ../webpiano-darwin-arm64.tar.gz . && cd ..
+          rm -rf dist
+
+      # 校验文件改为校验压缩包，唔再校验单个二进制
       - name: 生成SHA256校验文件
         run: |
-          sha256sum webpiano-linux-amd64 > webpiano-linux-amd64.sha256
-          sha256sum webpiano-linux-arm64 > webpiano-linux-arm64.sha256
-          sha256sum webpiano-windows-amd64.exe > webpiano-windows-amd64.exe.sha256
-          sha256sum webpiano-darwin-amd64 > webpiano-darwin-amd64.sha256
-          sha256sum webpiano-darwin-arm64 > webpiano-darwin-arm64.sha256
+          sha256sum *.zip *.tar.gz > sha256sums.txt
 
+      # 上传文件改成全部压缩包 + 校验文件，删除单独exe
       - name: 创建GitHub Release上传制品
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.get-version.outputs.ver }}
           name: Release ${{ needs.get-version.outputs.ver }}
           files: |
-            webpiano-linux-amd64
-            webpiano-linux-amd64.sha256
-            webpiano-linux-arm64
-            webpiano-linux-arm64.sha256
-            webpiano-windows-amd64.exe
-            webpiano-windows-amd64.exe.sha256
-            webpiano-darwin-amd64
-            webpiano-darwin-amd64.sha256
-            webpiano-darwin-arm64
-            webpiano-darwin-arm64.sha256
+            webpiano-windows-amd64.zip
+            webpiano-linux-amd64.tar.gz
+            webpiano-linux-arm64.tar.gz
+            webpiano-darwin-amd64.tar.gz
+            webpiano-darwin-arm64.tar.gz
+            sha256sums.txt
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
