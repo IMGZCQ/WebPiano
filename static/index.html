@@ -34,10 +34,54 @@
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span>彩虹键盘</span>
       </label>
-      <label class="volume">
-        <span>音量</span>
-        <input type="range" id="volume" min="0" max="100" value="80" />
+
+      <label class="midi-instrument">
+        <span>音色</span>
+        <select id="midi-instrument">
+          <option value="default">默认采样</option>
+          <option value="acoustic_grand_piano">原声钢琴</option>
+          <option value="bright_acoustic_piano">明亮钢琴</option>
+          <option value="electric_grand_piano">电三角钢琴</option>
+          <option value="honkytonk_piano">酒吧钢琴</option>
+          <option value="electric_piano_1">电钢琴1</option>
+          <option value="electric_piano_2">电钢琴2</option>
+          <option value="harpsichord">羽管键琴</option>
+          <option value="clavinet">击弦键琴</option>
+          <option value="celesta">钢片琴</option>
+          <option value="vibraphone">颤音琴</option>
+          <option value="church_organ">管风琴</option>
+          <option value="acoustic_guitar_nylon">尼龙弦吉他</option>
+          <option value="acoustic_guitar_steel">钢弦吉他</option>
+          <option value="electric_guitar_jazz">爵士电吉他</option>
+          <option value="violin">小提琴</option>
+          <option value="cello">大提琴</option>
+          <option value="trumpet">小号</option>
+          <option value="french_horn">圆号</option>
+          <option value="trombone">长号</option>
+          <option value="alto_sax">中音萨克斯</option>
+          <option value="flute">长笛</option>
+          <option value="choir_aahs">人声合唱</option>
+        </select>
       </label>
+      <div class="midi-control">
+        <input type="file" id="midi-file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden />
+        <button type="button" id="midi-btn" class="midi-btn" title="选择并播放 MIDI 文件">
+          <svg class="midi-icon midi-icon-play" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 4l14 8-14 8V4z" />
+          </svg>
+          <svg class="midi-icon midi-icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+          <span class="midi-btn-label">MIDI</span>
+        </button>
+        <button type="button" id="midi-reload" class="midi-reload" title="选择其他 MIDI 文件" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5V2L7 7l5 5V8c3.31 0 6 2.69 6 6 0 1-0.25 1.97-0.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 14c0-4.42-3.58-8-8-8zm-6.3 1.74L4.24 5.28A7.93 7.93 0 0 0 4 10c0 4.42 3.58 8 8 8v3l5-5-5-5v3c-3.31 0-6-2.69-6-6 0-1 0.25-1.97 0.7-2.8z" />
+          </svg>
+        </button>
+        <span id="midi-name" class="midi-name" hidden></span>
+      </div>
     </div>
   </header>
 

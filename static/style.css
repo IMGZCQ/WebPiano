@@ -159,6 +159,149 @@ body {
   cursor: pointer;
 }
 
+/* Instrument picker for MIDI playback (MusyngKite SoundFont) */
+.midi-instrument {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.midi-instrument select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  padding: 0 28px 0 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  outline: none;
+  /* Inline caret using background gradient */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23b5bcd0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.midi-instrument select:hover,
+.midi-instrument select:focus-visible {
+  border-color: var(--accent);
+  background-color: var(--panel-2, rgba(107, 140, 255, 0.08));
+}
+.midi-instrument select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Native dropdown menu items inherit the OS theme by default, which clashes
+   with our dark UI. Force a dark background + light text on the option list
+   for both the open menu and the closed <select>. */
+.midi-instrument select,
+.midi-instrument select option {
+  color-scheme: dark;
+  background-color: #1f2230;
+  color: #e6e9f0;
+}
+.midi-instrument select option:checked {
+  background-color: #2b3148 linear-gradient(0deg, #2b3148 0%, #2b3148 100%);
+  color: #ffffff;
+}
+.midi-instrument select option:hover {
+  background-color: #353a55;
+  color: #ffffff;
+}
+
+/* MIDI control: file picker + play/pause toggle */
+.midi-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.midi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.midi-btn:hover {
+  background: rgba(107, 140, 255, 0.12);
+  color: var(--text);
+  border-color: rgba(107, 140, 255, 0.35);
+}
+.midi-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.midi-btn .midi-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+/* Default: show the play icon (used to start playback or open file picker) */
+.midi-btn .midi-icon-pause { display: none; }
+.midi-btn.is-playing {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-color: transparent;
+}
+.midi-btn.is-playing .midi-icon-play { display: none; }
+.midi-btn.is-playing .midi-icon-pause { display: inline-block; }
+.midi-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.midi-reload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 6px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.midi-reload[hidden] { display: none; }
+.midi-name[hidden] { display: none; }
+.midi-reload:hover {
+  background: rgba(107, 140, 255, 0.12);
+  color: var(--text);
+  border-color: rgba(107, 140, 255, 0.35);
+}
+.midi-reload:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.midi-reload svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+.midi-name {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Stage */
 .stage {
   flex: 1;
@@ -308,11 +451,11 @@ body {
   background: linear-gradient(180deg, #353846 0%, #1a1c25 100%);
 }
 .key-black.active {
-  background: linear-gradient(180deg, #4a4d5d 0%, #1f212b 100%);
+  background: linear-gradient(180deg, #ff8c42 0%, #e65100 100%);
   transform: translateY(1px);
   box-shadow:
-    inset 0 -1px 0 rgba(255,255,255,0.06),
-    inset 0 2px 0 rgba(0,0,0,0.5),
+    inset 0 -1px 0 rgba(255,255,255,0.15),
+    inset 0 2px 0 rgba(0,0,0,0.3),
     0 1px 2px rgba(0,0,0,0.5);
 }
 .key-black.active .key-name { color: #fff; }
@@ -559,6 +702,7 @@ body {
   .brand h1 { font-size: 16px; }
   .topbar { padding: 14px 16px; }
   .topbar-actions { gap: 14px; }
+  .midi-name { max-width: 120px; }
 }
 @media (max-width: 600px) {
   .piano-keys { height: 170px; }
@@ -566,6 +710,8 @@ body {
   .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }
   .topbar-actions { width: 100%; justify-content: space-between; }
   .hint { font-size: 12px; padding: 6px 12px; text-align: center; }
+  .midi-name { display: none; }
+  .midi-control { flex: 0 0 auto; }
 }
 
 /* Touch mode: dual-row fullscreen piano for mobile/touch */

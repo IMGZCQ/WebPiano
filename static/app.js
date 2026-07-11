@@ -1,8 +1,20 @@
 // Virtual Piano - main app
 // Vanilla JS + Web Audio API, no build step.
 
+import { Soundfont } from "./vendor/smplr.mjs";
+import { Midi } from "./vendor/tonejs-midi.mjs";
+
 const SAMPLE_BASE = "samples/piano/";
 const WHITE_COUNT = 36;
+
+// SoundFont keyboard note sustain parameters.
+// A key press starts the note with NO fixed duration so it sustains until the
+// sample buffer ends naturally OR the key is released. On release:
+//  - short press (< SHORT_PRESS_THRESHOLD_MS): let it ring for ~SHORT_PRESS_RING_MS
+//    total (matching the previous fixed-duration feel), then stop.
+//  - long press: stop immediately so smplr's 0.3s release envelope fades it out.
+const SHORT_PRESS_THRESHOLD_MS = 250;
+const SHORT_PRESS_RING_MS = 600;
 
 // Note layout. Each entry: name, keys (array of supported keys), file, type, whiteIndex.
 // `keys` is a list of normalized key identifiers (see normalizeKey below).
@@ -416,7 +428,7 @@ async function initAudio() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     audio.ctx = new Ctx();
     audio.master = audio.ctx.createGain();
-    audio.master.gain.value = parseInt(volumeEl.value, 10) / 100;
+    audio.master.gain.value = 1.0;
     audio.master.connect(audio.ctx.destination);
 }
 
@@ -442,12 +454,55 @@ async function loadAllSamples(onProgress) {
 
 function playNote(note) {
     if (!audio.ctx) return;
-    const buf = audio.buffers.get(note.file);
-    if (!buf) return;
-    const src = audio.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audio.master);
-    src.start(0);
+    // Default selection: original per-key MP3 samples. Other selections go
+    // through the loaded Soundfont so the user hears the chosen timbre.
+    if (keyboard.currentInstrument === "default") {
+        const buf = audio.buffers.get(note.file);
+        if (!buf) return;
+        const src = audio.ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audio.master);
+        src.start(0);
+        return;
+    }
+    ensureKeyboardInstrument(keyboard.currentInstrument).then(sf => {
+        if (!sf) return;
+        // Cancel any previous un-stopped instance of the same pitch so
+        // re-triggers don't pile up and so switching off the key releases
+        // the note promptly. The Soundfont handles the release envelope.
+        const existing = keyboard.activeStops.get(note.name);
+        if (existing) {
+            try { existing(); } catch (_) {}
+        }
+        // A pending short-release timer (from a previous short press) is no
+        // longer relevant now that the note has been re-triggered.
+        const pendingTimer = keyboard.activeShortReleaseTimers.get(note.name);
+        if (pendingTimer) {
+            clearTimeout(pendingTimer);
+            keyboard.activeShortReleaseTimers.delete(note.name);
+        }
+        try {
+            // Start WITHOUT a fixed duration so the note sustains until the
+            // sample buffer ends naturally OR releaseKeyboardNote() calls the
+            // returned stop fn on key-up. Passing a duration would make smplr
+            // pre-schedule the decay envelope (startDecay), which permanently
+            // locks stopAt — after that, calling stop() early has no effect.
+            // With no duration, stop() on key-up properly triggers the 0.3s
+            // release fade-out.
+            const stopFn = sf.start({
+                note: note.name,
+                time: audio.ctx.currentTime,
+                velocity: 100,
+            });
+            if (typeof stopFn === "function") {
+                keyboard.activeStops.set(note.name, stopFn);
+                keyboard.activeStartTimes.set(note.name, performance.now());
+            }
+        } catch (_) {
+            // Ignore individual note failures (e.g. notes outside the
+            // SoundFont's sampled range).
+        }
+    });
 }
 
 // ---------- DOM / render ----------
@@ -455,7 +510,7 @@ const pianoEl = document.getElementById("piano");
 const keysEl = document.getElementById("keys");
 const showKeyEl = document.getElementById("toggle-key");
 const showNoteEl = document.getElementById("toggle-note");
-const volumeEl = document.getElementById("volume");
+const volumeEl = null;
 const touchModeEl = document.getElementById("toggle-touch");
 const touchPianoEl = document.getElementById("touch-piano");
 const touchKeysHighEl = document.getElementById("touch-keys-high");
@@ -641,14 +696,47 @@ function releaseNote(name) {
     if (cur <= 1) {
         noteHoldCounts.delete(name);
         setHighlight(name, false);
+        releaseKeyboardNote(name);
     } else {
         noteHoldCounts.set(name, cur - 1);
+    }
+}
+
+// Stop a sounding SoundFont keyboard note when its key is released.
+// Short presses (< SHORT_PRESS_THRESHOLD_MS) are let to ring for a total of
+// ~SHORT_PRESS_RING_MS so a quick tap still feels like the old fixed-duration
+// note; longer holds are stopped immediately so smplr's per-instrument release
+// envelope fades the tail out naturally. The default-samples path has no
+// stopFn (each MP3 has its own baked-in envelope) so this is a no-op there.
+function releaseKeyboardNote(name) {
+    const stopFn = keyboard.activeStops.get(name);
+    if (!stopFn) return;
+    const startTime = keyboard.activeStartTimes.get(name);
+    const now = performance.now();
+    const heldMs = startTime ? (now - startTime) : SHORT_PRESS_THRESHOLD_MS;
+    keyboard.activeStartTimes.delete(name);
+    if (heldMs < SHORT_PRESS_THRESHOLD_MS) {
+        // Keep stopFn in activeStops so a quick re-trigger (playNote) can
+        // find and stop this still-ringing note. The timer deletes it when
+        // it fires. Otherwise the first note would never be stopped and
+        // would bleed into the second press.
+        const remaining = Math.max(0, SHORT_PRESS_RING_MS - heldMs);
+        const timerId = setTimeout(() => {
+            keyboard.activeShortReleaseTimers.delete(name);
+            keyboard.activeStops.delete(name);
+            try { stopFn(); } catch (_) {}
+        }, remaining);
+        keyboard.activeShortReleaseTimers.set(name, timerId);
+    } else {
+        keyboard.activeStops.delete(name);
+        try { stopFn(); } catch (_) {}
     }
 }
 
 function releaseAllHeldNotes() {
     for (const name of noteHoldCounts.keys()) {
         setHighlight(name, false);
+        releaseKeyboardNote(name);
     }
     noteHoldCounts.clear();
     mouseHeldNote = null;
@@ -854,11 +942,7 @@ function pressTouchNote(name) {
 showKeyEl.addEventListener("change", setKeyVisible);
 showNoteEl.addEventListener("change", setKeyVisible);
 
-volumeEl.addEventListener("input", () => {
-    if (audio.master) {
-        audio.master.gain.value = parseInt(volumeEl.value, 10) / 100;
-    }
-});
+
 
 // ---------- Touch mode ----------
 // Toggle the dual-row fullscreen piano for mobile / touch play. The state
@@ -918,6 +1002,558 @@ rainbowModeEl.addEventListener("change", () => {
     setRainbowMode(on);
     try { localStorage.setItem(RAINBOW_KEY, on ? "1" : "0"); } catch (_) {}
 });
+
+// ---------- Keyboard instrument ----------
+// The top-bar 音色 dropdown changes the timbre of the on-screen piano
+// (manual keyboard + touch). The default "default" option uses the original
+// MP3 samples under samples/piano/. Any other option loads the matching
+// MusyngKite SoundFont on demand and plays the keys through it. MIDI file
+// playback deliberately uses a fixed piano SoundFont — the timbre of a
+// MIDI is determined by the file's program-change events, not by this
+// picker, so the selector and the MIDI player are decoupled.
+const keyboardInstrumentEl = document.getElementById("midi-instrument");
+const KEYBOARD_INSTRUMENT_KEY = "fnpiano.keyboardInstrument";
+
+const keyboard = {
+    currentInstrument: "default", // "default" = samples/piano/*.mp3
+    soundfont: null, // Soundfont instance for the active non-default instrument
+    soundfontCache: new Map(), // instrument id -> Soundfont instance
+    soundfontPromises: new Map(), // instrument id -> loading promise
+    activeStops: new Map(), // note name -> stop fn returned by Soundfont.start()
+    activeStartTimes: new Map(), // note name -> press timestamp (performance.now)
+    activeShortReleaseTimers: new Map(), // note name -> pending short-release setTimeout id
+    switchToken: 0, // increments on every instrument change so a slow load
+    // for the previous instrument can't override the current one
+};
+
+// Map MusyngKite instrument id -> local SoundFont file shipped under
+// static/soundfonts/. All files are MusyngKite OGG variants so the browser
+// decodes them through the same path. Keep this list in sync with the
+// non-default <option> entries in index.html.
+const instrumentFileUrl = (instrument) => `soundfonts/${instrument}-ogg.js`;
+
+// Load (or fetch from cache) the Soundfont for the given keyboard
+// instrument. Returns null when the caller asks for the default ("default")
+// so the caller can fall back to the MP3 sample path.
+async function ensureKeyboardInstrument(instrument) {
+    if (instrument === "default") return null;
+    if (keyboard.soundfont && keyboard.currentInstrument === instrument) {
+        return keyboard.soundfont;
+    }
+    let sf = keyboard.soundfontCache.get(instrument);
+    if (!sf) {
+        let loadPromise = keyboard.soundfontPromises.get(instrument);
+        if (!loadPromise) {
+            await initAudio();
+            if (audio.ctx.state === "suspended") {
+                try { await audio.ctx.resume(); } catch (_) {}
+            }
+            loadPromise = (async () => {
+                const instance = new Soundfont(audio.ctx, {
+                    instrument,
+                    library: instrumentFileUrl,
+                    destination: audio.master,
+                    extraGain: 20,
+                });
+                await instance.loaded();
+                keyboard.soundfontCache.set(instrument, instance);
+                return instance;
+            })();
+            keyboard.soundfontPromises.set(instrument, loadPromise);
+        }
+        sf = await loadPromise;
+    }
+    // The user may have switched to a different instrument while the load
+    // was in flight. In that case, leave keyboard.soundfont pointing at the
+    // current active instrument and just return the newly loaded instance
+    // (it's now in the cache for next time the user picks this one).
+    if (keyboard.currentInstrument !== instrument) return sf;
+    keyboard.soundfont = sf;
+    return sf;
+}
+
+// Swap the keyboard's active instrument. Any notes still sounding from the
+// previous instrument are cut off so the user doesn't get a stuck note when
+// switching. A monotonically increasing token guards against an in-flight
+// load for the old instrument winning the race and re-pointing the cache.
+async function switchKeyboardInstrument(newInstrument) {
+    if (newInstrument === keyboard.currentInstrument) return;
+    for (const stopFn of keyboard.activeStops.values()) {
+        try { stopFn(); } catch (_) {}
+    }
+    keyboard.activeStops.clear();
+    keyboard.activeStartTimes.clear();
+    for (const timerId of keyboard.activeShortReleaseTimers.values()) {
+        clearTimeout(timerId);
+    }
+    keyboard.activeShortReleaseTimers.clear();
+    const token = ++keyboard.switchToken;
+    keyboard.currentInstrument = newInstrument;
+    keyboard.soundfont = null;
+    if (newInstrument === "default") return;
+    try {
+        await ensureKeyboardInstrument(newInstrument);
+    } catch (err) {
+        if (token !== keyboard.switchToken) return; // stale load
+        console.error("Failed to load instrument:", err);
+        alert("加载音色失败：" + (err && err.message ? err.message : err));
+    }
+}
+
+keyboardInstrumentEl.addEventListener("change", () => {
+    const v = keyboardInstrumentEl.value;
+    try { localStorage.setItem(KEYBOARD_INSTRUMENT_KEY, v); } catch (_) {}
+    switchKeyboardInstrument(v);
+});
+
+keyboardInstrumentEl.addEventListener("keydown", (e) => {
+    if (e.code.startsWith("Arrow")) {
+        e.preventDefault();
+    }
+});
+
+// Restore the previously selected instrument on startup so the user's
+// choice persists across reloads. Non-default selections are preloaded in
+// the background so the first key press doesn't stall on the network/parse.
+(function initKeyboardInstrumentSelection() {
+    let saved = null;
+    try { saved = localStorage.getItem(KEYBOARD_INSTRUMENT_KEY); } catch (_) {}
+    if (saved && keyboardInstrumentEl.querySelector(`option[value="${saved}"]`)) {
+        keyboardInstrumentEl.value = saved;
+        keyboard.currentInstrument = saved;
+        if (saved !== "default") ensureKeyboardInstrument(saved);
+    } else {
+        keyboardInstrumentEl.value = "default";
+        keyboard.currentInstrument = "default";
+    }
+})();
+
+// ---------- MIDI playback ----------
+// Plays MIDI files using a fixed piano SoundFont (MusyngKite
+// acoustic_grand_piano). The timbre of a MIDI is determined by the file's
+// program-change events — using a single piano here is the simplest
+// approximation. The top-bar 音色 selector is intentionally NOT wired
+// here; it only affects the manual keyboard. The button in the top bar
+// combines file selection + play/pause: a fresh click opens the file
+// dialog, subsequent clicks toggle playback. Visual highlights on the
+// piano keys are driven by the same scheduled timeline so the user can
+// see which notes are being played.
+const midiBtn = document.getElementById("midi-btn");
+const midiFileInput = document.getElementById("midi-file");
+const midiReloadBtn = document.getElementById("midi-reload");
+const midiNameEl = document.getElementById("midi-name");
+
+const MIDI_PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function midiToNoteName(midi) {
+    const pitch = MIDI_PITCH_NAMES[((midi % 12) + 12) % 12];
+    const octave = Math.floor(midi / 12) - 1;
+    return pitch + octave;
+}
+
+const midi = {
+    // 'idle' = no file, 'loaded' = file ready to play, 'playing' = sounding,
+    // 'paused' = paused mid-track.
+    status: "idle",
+    fileName: null,
+    notes: [], // {midi, name, time, duration, velocity} sorted by time
+    totalDuration: 0,
+    soundfont: null, // Soundfont instance (always acoustic_grand_piano)
+    soundfontLoad: null, // promise resolving when the Soundfont is ready
+    ctxStartTime: 0, // AudioContext time at the most recent play()
+    pausedAt: 0, // seconds elapsed in the MIDI timeline at the most recent pause
+    visualTimers: [], // setTimeout ids for visual on/off callbacks
+    stopFns: [], // stop() callbacks returned by Soundfont.start()
+    highlightCounts: new Map(), // name -> active visual on count (for safe clear)
+    endTimer: null, // setTimeout id that flips status back to "loaded" at track end
+    maxPolyphony: 1024, // maximum simultaneous voices to prevent audio overload
+    activeVoices: [], // {stopFn, endTime} for polyphony management
+};
+
+// Load the (single) piano SoundFont used for MIDI playback. Cached in
+// midi.soundfont after the first call so subsequent plays don't re-fetch.
+async function ensureSoundfont() {
+    if (midi.soundfont) {
+        await midi.soundfontLoad;
+        return midi.soundfont;
+    }
+    if (midi.soundfontLoad) {
+        await midi.soundfontLoad;
+        return midi.soundfont;
+    }
+    await initAudio();
+    // AudioContext starts in "suspended" state under modern browser autoplay
+    // policies. The MIDI button click is the user gesture that unlocks it, so
+    // resuming here (instead of waiting for the global click/keydown listener
+    // in init()) guarantees playback actually produces sound.
+    if (audio.ctx.state === "suspended") {
+        try { await audio.ctx.resume(); } catch (_) {}
+    }
+    // Route through audio.master so the topbar volume slider also affects
+    // MIDI playback. extraGain boosts the smplr default (5) because the
+    // local SoundFont samples decode to noticeably quieter buffers than
+    // the default MusyngKite OGG library smplr is tuned for.
+    midi.soundfontLoad = (async () => {
+        midi.soundfont = new Soundfont(audio.ctx, {
+            instrument: "acoustic_grand_piano",
+            library: instrumentFileUrl,
+            destination: audio.master,
+            extraGain: 20,
+        });
+        await midi.soundfont.loaded();
+    })();
+    await midi.soundfontLoad;
+    return midi.soundfont;
+}
+
+function updateMidiUI() {
+    midiBtn.classList.toggle("is-playing", midi.status === "playing");
+    const label = midiBtn.querySelector(".midi-btn-label");
+    midiBtn.disabled = midi.status === "loading";
+    if (midi.status === "idle") {
+        label.textContent = "MIDI";
+        midiBtn.title = "选择并播放 MIDI 文件";
+    } else if (midi.status === "loading") {
+        label.textContent = "加载…";
+        midiBtn.title = "正在加载 MIDI";
+    } else if (midi.status === "loaded") {
+        label.textContent = "播放";
+        midiBtn.title = midi.fileName ? `播放 ${midi.fileName}` : "播放";
+    } else if (midi.status === "playing") {
+        label.textContent = "暂停";
+        midiBtn.title = midi.fileName ? `暂停 ${midi.fileName}` : "暂停";
+    } else if (midi.status === "paused") {
+        label.textContent = "继续";
+        midiBtn.title = midi.fileName ? `继续 ${midi.fileName}` : "继续";
+    }
+    const hasFile = midi.fileName != null;
+    midiReloadBtn.hidden = !hasFile;
+    midiNameEl.hidden = !hasFile;
+    if (hasFile) midiNameEl.textContent = midi.fileName;
+}
+
+function clearMidiVisualTimers() {
+    for (const id of midi.visualTimers) clearTimeout(id);
+    midi.visualTimers = [];
+}
+
+function clearMidiEndTimer() {
+    if (midi.endTimer != null) {
+        clearTimeout(midi.endTimer);
+        midi.endTimer = null;
+    }
+}
+
+// Called when the MIDI timeline reaches its end naturally. Flips the status
+// back to "loaded" so the button reverts to 播放 and a fresh click replays
+// from the beginning. Guarded so it doesn't clobber a manual pause/reset
+// that happened in the meantime.
+function onMidiPlaybackEnd() {
+    midi.endTimer = null;
+    if (midi.status !== "playing") return;
+    clearMidiVisualTimers();
+    stopMidiAudio();
+    clearMidiHighlights();
+    midi.pausedAt = 0;
+    midi.ctxStartTime = 0;
+    midi.status = "loaded";
+    updateMidiUI();
+}
+
+function stopMidiAudio() {
+    for (const fn of midi.stopFns) {
+        try { fn(); } catch (_) {}
+    }
+    midi.stopFns = [];
+    midi.activeVoices = [];
+    if (midi.soundfont) {
+        try { midi.soundfont.stop(); } catch (_) {}
+    }
+}
+
+// Manage polyphony by limiting simultaneous voices. When the limit is reached,
+// steal the oldest voice (earliest endTime) to make room for the new one.
+function addMidiVoice(stopFn, endTime) {
+    const now = audio.ctx.currentTime;
+    // Clean up expired voices
+    midi.activeVoices = midi.activeVoices.filter(v => v.endTime > now);
+    
+    if (midi.activeVoices.length >= midi.maxPolyphony) {
+        midi.activeVoices.sort((a, b) => a.endTime - b.endTime);
+        const oldest = midi.activeVoices.shift();
+        if (oldest && oldest.stopFn) {
+            try { oldest.stopFn(); } catch (_) {}
+        }
+    }
+    midi.activeVoices.push({ stopFn, endTime });
+}
+
+function clearMidiHighlights() {
+    for (const name of midi.highlightCounts.keys()) {
+        setHighlight(name, false);
+    }
+    midi.highlightCounts.clear();
+}
+
+function resetMidiPlaybackState() {
+    clearMidiVisualTimers();
+    clearMidiEndTimer();
+    stopMidiAudio();
+    clearMidiHighlights();
+    midi.pausedAt = 0;
+    midi.ctxStartTime = 0;
+}
+
+async function loadMidiFile(file) {
+    resetMidiPlaybackState();
+    midi.status = "loading";
+    midi.fileName = file.name;
+    updateMidiUI();
+    try {
+        const buf = await file.arrayBuffer();
+        const midiData = new Midi(buf);
+        const notes = [];
+        for (const track of midiData.tracks) {
+            if (track.channel === 9) continue; // skip drum track (channel 10 = 9 in 0-indexed)
+            for (const note of track.notes) {
+                if (note.midi < 0 || note.midi > 127) continue;
+                notes.push({
+                    midi: note.midi,
+                    name: midiToNoteName(note.midi),
+                    time: note.time,
+                    duration: Math.max(note.duration, 0.01),
+                    velocity: note.velocity,
+                });
+            }
+        }
+        notes.sort((a, b) => a.time - b.time);
+        midi.notes = notes;
+        midi.totalDuration = midiData.duration || 0;
+        midi.status = "loaded";
+    } catch (err) {
+        console.error("Failed to load MIDI:", err);
+        midi.fileName = null;
+        midi.notes = [];
+        midi.totalDuration = 0;
+        midi.status = "idle";
+        alert("无法加载 MIDI 文件：" + (err && err.message ? err.message : err));
+    }
+    updateMidiUI();
+}
+
+// Visual highlight helpers: refcount so back-to-back notes of the same pitch
+// don't flicker off between them.
+function midiHighlightOn(name) {
+    const cur = midi.highlightCounts.get(name) || 0;
+    midi.highlightCounts.set(name, cur + 1);
+    if (cur === 0) setHighlight(name, true);
+}
+function midiHighlightOff(name) {
+    const cur = midi.highlightCounts.get(name) || 0;
+    if (cur <= 1) {
+        midi.highlightCounts.delete(name);
+        setHighlight(name, false);
+    } else {
+        midi.highlightCounts.set(name, cur - 1);
+    }
+}
+
+function scheduleFrom(elapsed) {
+    if (!midi.soundfont) return;
+    midi.ctxStartTime = audio.ctx.currentTime;
+    midi.scheduleIndex = 0;
+    midi.schedulerTimer = null;
+    midi.highlightIndex = 0;
+    midi.highlightRaf = null;
+
+    const SCHEDULE_AHEAD = 2.0;
+    const CHECK_INTERVAL = 50;
+
+    // Build highlight events array (ON and OFF events sorted by time)
+    midi.highlightEvents = [];
+    for (const note of midi.notes) {
+        if (note.time + note.duration <= elapsed) continue;
+        midi.highlightEvents.push({ time: note.time, type: 'on', name: note.name });
+        midi.highlightEvents.push({ time: note.time + note.duration, type: 'off', name: note.name });
+    }
+    midi.highlightEvents.sort((a, b) => a.time - b.time);
+
+    // Audio lookahead scheduler
+    function schedulerTick() {
+        if (midi.status !== "playing") return;
+        const currentTime = audio.ctx.currentTime - midi.ctxStartTime + elapsed;
+        const scheduleUntil = currentTime + SCHEDULE_AHEAD;
+
+        while (midi.scheduleIndex < midi.notes.length) {
+            const note = midi.notes[midi.scheduleIndex];
+            if (note.time > scheduleUntil) break;
+
+            const offset = note.time - elapsed;
+            const audioTime = midi.ctxStartTime + offset;
+
+            if (note.time + note.duration > currentTime) {
+                try {
+                    const vel = Math.max(0.05, Math.min(1, note.velocity || 0.8)) * 127;
+                    const stopFn = midi.soundfont.start({
+                        note: note.name,
+                        time: audioTime,
+                        duration: note.duration,
+                        velocity: vel,
+                    });
+                    if (typeof stopFn === "function") {
+                        midi.stopFns.push(stopFn);
+                        addMidiVoice(stopFn, audioTime + note.duration);
+                    }
+                } catch (err) {}
+            }
+
+            midi.scheduleIndex++;
+        }
+
+        if (midi.scheduleIndex >= midi.notes.length) {
+            clearMidiEndTimer();
+            const remaining = midi.totalDuration - elapsed;
+            if (remaining > 0) {
+                midi.endTimer = setTimeout(onMidiPlaybackEnd, remaining * 1000);
+            } else {
+                onMidiPlaybackEnd();
+            }
+        } else {
+            midi.schedulerTimer = setTimeout(schedulerTick, CHECK_INTERVAL);
+        }
+    }
+
+    // Highlight scheduler using requestAnimationFrame with AudioContext clock
+    function highlightLoop() {
+        if (midi.status !== "playing") return;
+        const currentTime = audio.ctx.currentTime - midi.ctxStartTime + elapsed;
+
+        // Process all events up to current time
+        while (midi.highlightIndex < midi.highlightEvents.length) {
+            const event = midi.highlightEvents[midi.highlightIndex];
+            if (event.time > currentTime) break;
+
+            if (event.type === 'on') {
+                midiHighlightOn(event.name);
+            } else {
+                midiHighlightOff(event.name);
+            }
+            midi.highlightIndex++;
+        }
+
+        if (midi.highlightIndex < midi.highlightEvents.length) {
+            midi.highlightRaf = requestAnimationFrame(highlightLoop);
+        }
+    }
+
+    schedulerTick();
+    highlightLoop();
+}
+
+function startMidiPlayback() {
+    if (midi.status !== "loaded" && midi.status !== "paused") return;
+    ensureSoundfont()
+        .then(() => {
+            // scheduleFrom() is allowed to run even if the user already
+            // paused while the soundfont was loading.
+            if (midi.status !== "loaded" && midi.status !== "paused") return;
+            midi.status = "playing";
+            updateMidiUI();
+            scheduleFrom(midi.pausedAt);
+        })
+        .catch((err) => {
+            console.error("Failed to load soundfont:", err);
+            alert("加载音源失败：" + (err && err.message ? err.message : err));
+        });
+}
+
+function pauseMidiPlayback() {
+    if (midi.status !== "playing") return;
+    const elapsed = midi.pausedAt + (audio.ctx.currentTime - midi.ctxStartTime);
+    clearMidiVisualTimers();
+    clearMidiEndTimer();
+    stopMidiAudio();
+    clearMidiHighlights();
+    midi.pausedAt = elapsed;
+    midi.ctxStartTime = 0;
+    midi.status = "paused";
+    updateMidiUI();
+}
+
+function resumeMidiPlayback() {
+    if (midi.status !== "paused") return;
+    startMidiPlayback();
+}
+
+function onMidiBtnClick() {
+    if (midi.status === "loading") return;
+    // Resume AudioContext immediately while we're still in the user-gesture
+    // call stack. The async chain in ensureSoundfont() can lose the gesture
+    // association on some browsers, so the safest place is here.
+    if (audio.ctx && audio.ctx.state === "suspended") {
+        audio.ctx.resume();
+    }
+    if (midi.status === "idle") {
+        midiFileInput.click();
+        return;
+    }
+    if (midi.status === "loaded") {
+        startMidiPlayback();
+        return;
+    }
+    if (midi.status === "playing") {
+        pauseMidiPlayback();
+        return;
+    }
+    if (midi.status === "paused") {
+        resumeMidiPlayback();
+        return;
+    }
+}
+
+function onMidiFileChange(e) {
+    const file = e.target.files && e.target.files[0];
+    // Reset the input so the same file can be picked again later.
+    e.target.value = "";
+    if (!file) return;
+    loadMidiFile(file);
+}
+
+function onMidiReloadClick() {
+    // If currently playing, pause first so we don't leave audio hanging.
+    if (midi.status === "playing") pauseMidiPlayback();
+    resetMidiPlaybackState();
+    midi.status = "idle";
+    midi.fileName = null;
+    midi.notes = [];
+    midi.totalDuration = 0;
+    updateMidiUI();
+    midiFileInput.click();
+}
+
+midiBtn.addEventListener("click", onMidiBtnClick);
+midiFileInput.addEventListener("change", onMidiFileChange);
+midiReloadBtn.addEventListener("click", onMidiReloadClick);
+
+// Drag-and-drop a MIDI file onto the page to load and play it.
+function isMidiFile(file) {
+    if (!file) return false;
+    if (/\.(mid|midi)$/i.test(file.name)) return true;
+    return /midi/i.test(file.type || "");
+}
+window.addEventListener("dragover", (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.items || []).some((it) => it.kind === "file")) {
+        e.preventDefault();
+    }
+});
+window.addEventListener("drop", (e) => {
+    if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+    const file = e.dataTransfer.files[0];
+    if (!isMidiFile(file)) return;
+    e.preventDefault();
+    loadMidiFile(file);
+});
+
+updateMidiUI();
 
 // ---------- Init ----------
 (async function init() {
