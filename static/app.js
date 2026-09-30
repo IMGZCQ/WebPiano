@@ -3,6 +3,7 @@
 
 import { Soundfont } from "./vendor/smplr.mjs";
 import { Midi } from "./vendor/tonejs-midi.mjs";
+import { midiDevice, audioTimeToMidiTimestamp } from "./midi-device.js";
 
 const SAMPLE_BASE = "samples/piano/";
 const WHITE_COUNT = 36;
@@ -245,8 +246,8 @@ const KB_MAIN_LAYOUT = [
         { id: "KeyN", label: "N", w: 1 },
         { id: "KeyM", label: "M", w: 1 },
         { id: "Comma", label: ",", w: 1 },
-        { id: "Period", label: ".", w: 1 },
-        { id: "Slash", label: "/", w: 1 },
+        { id: "Period", label: ".", w: 1, pedal: "soft" },
+        { id: "Slash", label: "/", w: 1, pedal: "sostenuto" },
         { id: "ShiftRight", label: "Shift", w: 1.65 },
         { id: "ArrowUp", label: "↑", w: 1 },
         { id: "", label: "", w: 0.95 },
@@ -261,7 +262,7 @@ const KB_MAIN_LAYOUT = [
         { id: "MetaLeft", label: "Win", w: 1 },
         { id: "AltLeft", label: "Alt", w: 1 },
         { id: "Space", label: "", w: 6.25, subLabel: "空格 黑键辅助" },
-        { id: "AltRight", label: "Alt", w: 1 },
+        { id: "AltRight", label: "Alt", w: 1, pedal: "sustain" },
         { id: "MetaRight", label: "Win", w: 1 },
         { id: "ContextMenu", label: "Menu", w: 1 },
         { id: "ControlRight", label: "Ctrl", w: 1 },
@@ -391,6 +392,25 @@ function makeKbKeyEl(keyDef, keyToNotes) {
             }
         });
     }
+
+    if (keyDef.pedal) {
+        const pedal = PEDALS[keyDef.pedal];
+        el.classList.add("has-note", "is-pedal");
+        el.title = `${pedal.label}踏板 CC${pedal.cc} · 按住发往 MIDI 设备`;
+        const wrap = document.createElement("span");
+        wrap.className = "kb-key-notes";
+        const span = document.createElement("span");
+        span.className = "kb-note-pedal";
+        span.textContent = `CC${pedal.cc}`;
+        wrap.appendChild(span);
+        el.appendChild(wrap);
+
+        el.addEventListener("mousedown", (ev) => {
+            ev.preventDefault();
+            pedal.pointer = true;
+            setPedalLocal(keyDef.pedal, true);
+        });
+    }
     return el;
 }
 
@@ -418,10 +438,13 @@ function renderKeyboardDiagram() {
 const audio = {
     ctx: null,
     master: null,
+    soft: null, // gain node the soft pedal (CC67) ducks
     buffers: new Map(), // file -> AudioBuffer
     loadProgress: 0,
     loadTotal: 0,
 };
+
+const SOFT_PEDAL_GAIN = 0.55;
 
 async function initAudio() {
     if (audio.ctx) return;
@@ -429,7 +452,20 @@ async function initAudio() {
     audio.ctx = new Ctx();
     audio.master = audio.ctx.createGain();
     audio.master.gain.value = 1.0;
-    audio.master.connect(audio.ctx.destination);
+    audio.soft = audio.ctx.createGain();
+    audio.soft.gain.value = 1.0;
+    audio.master.connect(audio.soft);
+    audio.soft.connect(audio.ctx.destination);
+}
+
+function setSoftPedalGain(on) {
+    if (!audio.ctx || !audio.soft) return;
+    const target = on ? SOFT_PEDAL_GAIN : 1.0;
+    try {
+        audio.soft.gain.setTargetAtTime(target, audio.ctx.currentTime, 0.02);
+    } catch (_) {
+        audio.soft.gain.value = target;
+    }
 }
 
 async function loadAllSamples(onProgress) {
@@ -451,9 +487,16 @@ async function loadAllSamples(onProgress) {
         })
     );
 }
+function clampVelocity(velocity) {
+    if (velocity == null) return 100;
+    const v = Math.round(velocity);
+    if (!isFinite(v)) return 100;
+    return Math.max(1, Math.min(127, v));
+}
 
-function playNote(note) {
+function playNote(note, velocity) {
     if (!audio.ctx) return;
+    const vel = clampVelocity(velocity);
     // Default selection: original per-key MP3 samples. Other selections go
     // through the loaded Soundfont so the user hears the chosen timbre.
     if (keyboard.currentInstrument === "default") {
@@ -461,7 +504,10 @@ function playNote(note) {
         if (!buf) return;
         const src = audio.ctx.createBufferSource();
         src.buffer = buf;
-        src.connect(audio.master);
+        const gain = audio.ctx.createGain();
+        gain.gain.value = vel / 127;
+        src.connect(gain);
+        gain.connect(audio.master);
         src.start(0);
         return;
     }
@@ -492,7 +538,7 @@ function playNote(note) {
             const stopFn = sf.start({
                 note: note.name,
                 time: audio.ctx.currentTime,
-                velocity: 100,
+                velocity: vel,
             });
             if (typeof stopFn === "function") {
                 keyboard.activeStops.set(note.name, stopFn);
@@ -659,6 +705,12 @@ function activateByName(name) {
 // Press/release tracking: a note stays highlighted as long as at least one
 // press source (mouse, touch, or a keyboard key) is still holding it.
 const noteHoldCounts = new Map();
+
+const localPedalNotes = {
+    sustain: new Set(), 
+    sostenuto: new Set(),
+};
+
 let mouseHeldNote = null;
 let touchHeldNote = null;
 const keyToHeldNote = new Map();
@@ -683,23 +735,52 @@ function setHighlight(name, on) {
     }
 }
 
-function holdNote(name) {
+function holdNote(name, opts) {
     if (!name) return;
     const cur = noteHoldCounts.get(name) || 0;
     noteHoldCounts.set(name, cur + 1);
-    if (cur === 0) setHighlight(name, true);
+    if (cur === 0) {
+        setHighlight(name, true);
+        localPedalNotes.sustain.delete(name);
+        localPedalNotes.sostenuto.delete(name);
+        if (!(opts && opts.fromMidi)) sendMidiOutNoteOn(name);
+    }
 }
 
-function releaseNote(name) {
+function releaseNote(name, opts) {
     if (!name) return;
     const cur = noteHoldCounts.get(name) || 0;
     if (cur <= 1) {
         noteHoldCounts.delete(name);
-        setHighlight(name, false);
-        releaseKeyboardNote(name);
+        const bySostenuto = localPedalNotes.sostenuto.has(name);
+        const bySustain = PEDALS.sustain.local;
+        if (bySostenuto || bySustain) {
+            if (bySustain && !bySostenuto) localPedalNotes.sustain.add(name);
+        } else {
+            setHighlight(name, false);
+            releaseKeyboardNote(name);
+        }
+        if (!(opts && opts.fromMidi)) sendMidiOutNoteOff(name);
     } else {
         noteHoldCounts.set(name, cur - 1);
     }
+}
+function releaseLocalPedalNotes(kind, into) {
+    for (const name of Array.from(localPedalNotes[kind])) {
+        localPedalNotes[kind].delete(name);
+        if (noteHoldCounts.has(name)) continue;
+        if (into) {
+            localPedalNotes[into].add(name);
+            continue;
+        }
+        setHighlight(name, false);
+        releaseKeyboardNote(name);
+    }
+}
+
+function captureLocalSostenuto() {
+    localPedalNotes.sostenuto.clear();
+    for (const name of noteHoldCounts.keys()) localPedalNotes.sostenuto.add(name);
 }
 
 // Stop a sounding SoundFont keyboard note when its key is released.
@@ -739,10 +820,15 @@ function releaseAllHeldNotes() {
         releaseKeyboardNote(name);
     }
     noteHoldCounts.clear();
+    localPedalNotes.sustain.clear();
+    localPedalNotes.sostenuto.clear();
     mouseHeldNote = null;
     touchHeldNote = null;
     keyToHeldNote.clear();
     lastPointerTrigger = null;
+    releaseAllLocalPedals();
+    releaseAllMidiInNotes();
+    midiDevice.panic();
 }
 
 function activateByKey(key, isBlackMode) {
@@ -793,6 +879,13 @@ window.addEventListener("keydown", (e) => {
         return;
     }
 
+    const pedalName = PEDAL_BY_CODE.get(e.code);
+    if (pedalName) {
+        e.preventDefault();
+        setPedalLocal(pedalName, true);
+        return;
+    }
+
     const key = normalizeKey(e);
     if (!key) return;
     e.preventDefault();
@@ -821,6 +914,11 @@ window.addEventListener("keyup", (e) => {
     }
     if (e.code === "Space") {
         blackModeKeys.delete("Space");
+        return;
+    }
+    const pedalName = PEDAL_BY_CODE.get(e.code);
+    if (pedalName) {
+        setPedalLocal(pedalName, false);
         return;
     }
     const key = normalizeKey(e);
@@ -1003,16 +1101,14 @@ rainbowModeEl.addEventListener("change", () => {
     try { localStorage.setItem(RAINBOW_KEY, on ? "1" : "0"); } catch (_) {}
 });
 
-// ---------- Keyboard instrument ----------
-// The top-bar 音色 dropdown changes the timbre of the on-screen piano
-// (manual keyboard + touch). The default "default" option uses the original
-// MP3 samples under samples/piano/. Any other option loads the matching
-// MusyngKite SoundFont on demand and plays the keys through it. MIDI file
-// playback deliberately uses a fixed piano SoundFont — the timbre of a
-// MIDI is determined by the file's program-change events, not by this
-// picker, so the selector and the MIDI player are decoupled.
+
 const keyboardInstrumentEl = document.getElementById("midi-instrument");
 const KEYBOARD_INSTRUMENT_KEY = "fnpiano.keyboardInstrument";
+
+const INSTRUMENT_CN = {};
+for (const opt of keyboardInstrumentEl.options) {
+  if (opt.value && opt.value !== "default") INSTRUMENT_CN[opt.value] = opt.textContent;
+}
 
 const keyboard = {
     currentInstrument: "default", // "default" = samples/piano/*.mp3
@@ -1142,6 +1238,9 @@ const midiBtn = document.getElementById("midi-btn");
 const midiFileInput = document.getElementById("midi-file");
 const midiReloadBtn = document.getElementById("midi-reload");
 const midiNameEl = document.getElementById("midi-name");
+const midiVoiceConsole = document.getElementById("midi-voice-console");
+const midiVoiceRows = new Map();  
+const midiVoiceTimers = new Map();  
 
 const MIDI_PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function midiToNoteName(midi) {
@@ -1150,15 +1249,42 @@ function midiToNoteName(midi) {
     return pitch + octave;
 }
 
+const MIDI_PITCH_INDEX = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function noteNameToMidi(name) {
+    const m = /^([A-G]#?)(-?\d+)$/.exec(name || "");
+    if (!m) return null;
+    const semitone = MIDI_PITCH_INDEX[m[1][0]];
+    if (semitone === undefined) return null;
+    return (parseInt(m[2], 10) + 1) * 12 + semitone + (m[1].length === 2 ? 1 : 0);
+}
+
+const NOTE_BY_MIDI = new Map();
+NOTES.forEach((note) => {
+    const midi = noteNameToMidi(note.name);
+    if (midi != null) NOTE_BY_MIDI.set(midi, note);
+});
+
+const FILE_CC = { sustain: 64, sostenuto: 66, soft: 67 };
+const FILE_PEDAL_ON = 64 / 127;
+const FILE_SUSTAIN_MAX_TAIL = 20;
+
 const midi = {
     // 'idle' = no file, 'loaded' = file ready to play, 'playing' = sounding,
     // 'paused' = paused mid-track.
     status: "idle",
     fileName: null,
-    notes: [], // {midi, name, time, duration, velocity} sorted by time
+    notes: [], // {midi, name, time, duration, velocity, releaseTime, playDuration} sorted by time
+    pedalEvents: [],
+    pedalIndex: 0, 
     totalDuration: 0,
     soundfont: null, // Soundfont instance (always acoustic_grand_piano)
     soundfontLoad: null, // promise resolving when the Soundfont is ready
+    channelPrograms: new Map(), 
+    channelSf: new Map(),
+    channelSfPromises: [], 
+    ccEvents: [],      
+    ccIndex: 0,
+    ccState: new Map(), 
     ctxStartTime: 0, // AudioContext time at the most recent play()
     pausedAt: 0, // seconds elapsed in the MIDI timeline at the most recent pause
     visualTimers: [], // setTimeout ids for visual on/off callbacks
@@ -1169,40 +1295,123 @@ const midi = {
     activeVoices: [], // {stopFn, endTime} for polyphony management
 };
 
-// Load the (single) piano SoundFont used for MIDI playback. Cached in
-// midi.soundfont after the first call so subsequent plays don't re-fetch.
-async function ensureSoundfont() {
-    if (midi.soundfont) {
-        await midi.soundfontLoad;
-        return midi.soundfont;
+const PROGRAM_TO_SOUNDFONT = {
+    // 钢琴 Piano (0-7)
+    0: "acoustic_grand_piano", 1: "bright_acoustic_piano", 2: "electric_grand_piano", 3: "honkytonk_piano",
+    4: "electric_piano_1", 5: "electric_piano_2", 6: "harpsichord", 7: "clavinet",
+    // 半音打击乐器 Chromatic Percussion (8-15)
+    8: "celesta", 9: "glockenspiel", 10: "music_box", 11: "vibraphone",
+    12: "marimba", 13: "xylophone", 14: "tubular_bells", 15: "dulcimer",
+    // 风琴 Organ (16-23)
+    16: "drawbar_organ", 17: "percussive_organ", 18: "rock_organ", 19: "church_organ",
+    20: "reed_organ", 21: "accordion", 22: "harmonica", 23: "tango_accordion",
+    // 吉他 Guitar (24-31)
+    24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 26: "electric_guitar_jazz", 27: "electric_guitar_clean",
+    28: "electric_guitar_muted", 29: "overdriven_guitar", 30: "distortion_guitar", 31: "guitar_harmonics",
+    // 贝斯 Bass (32-39)
+    32: "acoustic_bass", 33: "electric_bass_finger", 34: "electric_bass_pick", 35: "fretless_bass",
+    36: "slap_bass_1", 37: "slap_bass_2", 38: "synth_bass_1", 39: "synth_bass_2",
+    // 弦乐器 Strings (40-47)
+    40: "violin", 41: "viola", 42: "cello", 43: "contrabass",
+    44: "tremolo_strings", 45: "pizzicato_strings", 46: "orchestral_harp", 47: "timpani",
+    // 合奏 Ensemble (48-55)
+    48: "string_ensemble_1", 49: "string_ensemble_2", 50: "synth_strings_1", 51: "synth_strings_2",
+    52: "choir_aahs", 53: "voice_oohs", 54: "synth_choir", 55: "orchestra_hit",
+    // 铜管乐器 Brass (56-63)
+    56: "trumpet", 57: "trombone", 58: "tuba", 59: "muted_trumpet",
+    60: "french_horn", 61: "brass_section", 62: "synth_brass_1", 63: "synth_brass_2",
+    // 簧片乐器 Reed (64-71)
+    64: "soprano_sax", 65: "alto_sax", 66: "tenor_sax", 67: "baritone_sax",
+    68: "oboe", 69: "english_horn", 70: "bassoon", 71: "clarinet",
+    // 吹管乐器 Pipe (72-79)
+    72: "piccolo", 73: "flute", 74: "recorder", 75: "pan_flute",
+    76: "blown_bottle", 77: "shakuhachi", 78: "whistle", 79: "ocarina",
+    // 合成主音 Synth Lead (80-87)
+    80: "lead_1_square", 81: "lead_2_sawtooth", 82: "lead_3_calliope", 83: "lead_4_chiff",
+    84: "lead_5_charang", 85: "lead_6_voice", 86: "lead_7_fifths", 87: "lead_8_bass__lead",
+    // 合成铺底 Synth Pad (88-95)
+    88: "pad_1_new_age", 89: "pad_2_warm", 90: "pad_3_polysynth", 91: "pad_4_choir",
+    92: "pad_5_bowed", 93: "pad_6_metallic", 94: "pad_7_halo", 95: "pad_8_sweep",
+    // 合成效果 Synth Effects (96-103)
+    96: "fx_1_rain", 97: "fx_2_soundtrack", 98: "fx_3_crystal", 99: "fx_4_atmosphere",
+    100: "fx_5_brightness", 101: "fx_6_goblins", 102: "fx_7_echoes", 103: "fx_8_scifi",
+    // 民族乐器 Ethnic (104-111)
+    104: "sitar", 105: "banjo", 106: "shamisen", 107: "koto",
+    108: "kalimba", 109: "bagpipe", 110: "fiddle", 111: "shanai",
+    // 打击乐器 Percussive (112-119)
+    112: "tinkle_bell", 113: "agogo", 114: "steel_drums", 115: "woodblock",
+    116: "taiko_drum", 117: "melodic_tom", 118: "synth_drum", 119: "reverse_cymbal",
+    // 特殊音效 Sound Effects (120-127)
+    120: "guitar_fret_noise", 121: "breath_noise", 122: "seashore", 123: "bird_tweet",
+    124: "telephone_ring", 125: "helicopter", 126: "applause", 127: "gunshot",
+};
+const FALLBACK_INSTRUMENT = "acoustic_grand_piano";
+function normalizeProgram(program) {
+    if (program == null) return 0;
+    if (typeof program === "number") return program;
+    if (typeof program === "string") {
+        const n = Number(program);
+        return Number.isNaN(n) ? 0 : n;
     }
-    if (midi.soundfontLoad) {
-        await midi.soundfontLoad;
-        return midi.soundfont;
-    }
-    await initAudio();
-    // AudioContext starts in "suspended" state under modern browser autoplay
-    // policies. The MIDI button click is the user gesture that unlocks it, so
-    // resuming here (instead of waiting for the global click/keydown listener
-    // in init()) guarantees playback actually produces sound.
-    if (audio.ctx.state === "suspended") {
-        try { await audio.ctx.resume(); } catch (_) {}
-    }
-    // Route through audio.master so the topbar volume slider also affects
-    // MIDI playback. extraGain boosts the smplr default (5) because the
-    // local SoundFont samples decode to noticeably quieter buffers than
-    // the default MusyngKite OGG library smplr is tuned for.
-    midi.soundfontLoad = (async () => {
-        midi.soundfont = new Soundfont(audio.ctx, {
-            instrument: "acoustic_grand_piano",
+    if (program.number != null) return normalizeProgram(program.number);
+    if (program.program != null) return normalizeProgram(program.program);
+    return 0;
+}
+const programSoundfonts = new Map();
+const programSoundfontPromises = new Map();
+
+async function getSoundfontById(id) {
+    if (programSoundfonts.has(id)) return programSoundfonts.get(id);
+    if (programSoundfontPromises.has(id)) return programSoundfontPromises.get(id);
+    const p = (async () => {
+        await initAudio();
+
+        if (audio.ctx.state === "suspended") {
+            try { await audio.ctx.resume(); } catch (_) {}
+        }
+        const instance = new Soundfont(audio.ctx, {
+            instrument: id,
             library: instrumentFileUrl,
             destination: audio.master,
             extraGain: 20,
         });
-        await midi.soundfont.loaded();
+        await instance.loaded();
+        programSoundfonts.set(id, instance);
+        return instance;
     })();
-    await midi.soundfontLoad;
-    return midi.soundfont;
+    programSoundfontPromises.set(id, p);
+    return p;
+}
+
+function getSoundfontForProgram(program) {
+    const p = normalizeProgram(program);
+    const id = PROGRAM_TO_SOUNDFONT[p] || FALLBACK_INSTRUMENT;
+    return getSoundfontById(id);
+}
+
+async function ensureSoundfont() {
+    const sf = await getSoundfontById(FALLBACK_INSTRUMENT);
+    midi.soundfont = sf;
+    return sf;
+}
+
+function preloadMidiChannelSoundfonts() {
+    midi.channelSfPromises = [];
+    for (const [channel, program] of midi.channelPrograms) {
+        midi.channelSfPromises.push(
+            getSoundfontForProgram(program)
+                .then((sf) => { midi.channelSf.set(channel, sf); })
+                .catch((_) => {})
+        );
+    }
+}
+
+async function ensureMidiSoundfonts() {
+    const loaders = [ensureSoundfont()];
+    if (midi.channelSfPromises && midi.channelSfPromises.length) {
+        loaders.push(...midi.channelSfPromises);
+    }
+    await Promise.all(loaders);
 }
 
 function updateMidiUI() {
@@ -1265,9 +1474,13 @@ function stopMidiAudio() {
     }
     midi.stopFns = [];
     midi.activeVoices = [];
-    if (midi.soundfont) {
-        try { midi.soundfont.stop(); } catch (_) {}
+    const sfs = new Set(midi.channelSf.values());
+    if (midi.soundfont) sfs.add(midi.soundfont);
+    for (const sf of sfs) {
+        try { sf.stop(); } catch (_) {}
     }
+    clearFilePedals();
+    midiDevice.panic();
 }
 
 // Manage polyphony by limiting simultaneous voices. When the limit is reached,
@@ -1301,6 +1514,154 @@ function resetMidiPlaybackState() {
     clearMidiHighlights();
     midi.pausedAt = 0;
     midi.ctxStartTime = 0;
+    midi.channelPrograms = new Map();
+    midi.channelSf = new Map();
+    midi.channelSfPromises = [];
+    midi.pedalEvents = [];
+    midi.pedalIndex = 0;
+    midi.ccEvents = [];
+    midi.ccIndex = 0;
+    midi.ccState = new Map();
+    clearFilePedals();
+    updateVoiceConsole();
+}
+
+function trackControlChanges(track, cc) {
+    const all = track && track.controlChanges;
+    if (!all) return [];
+    const list = all[cc];
+    return Array.isArray(list) ? list : [];
+}
+
+function pedalIntervals(pedalEvents, name, channel) {
+    const intervals = [];
+    let open = null;
+    for (const ev of pedalEvents) {
+        if (ev.name !== name || ev.channel !== channel) continue;
+        if (ev.on) {
+            if (open == null) open = ev.time;
+        } else if (open != null) {
+            intervals.push({ down: open, up: ev.time });
+            open = null;
+        }
+    }
+    if (open != null) intervals.push({ down: open, up: Infinity });
+    return intervals;
+}
+
+function applyPedalsToNotes(notes, pedalEvents) {
+    if (!pedalEvents.length) {
+        for (const note of notes) {
+            note.releaseTime = note.time + note.duration;
+            note.playDuration = note.duration;
+        }
+        return;
+    }
+    const sustain = new Map(); 
+    const sostenuto = new Map();
+    for (const note of notes) {
+        if (sustain.has(note.channel)) continue;
+        sustain.set(note.channel, pedalIntervals(pedalEvents, "sustain", note.channel));
+        sostenuto.set(note.channel, pedalIntervals(pedalEvents, "sostenuto", note.channel));
+    }
+    for (const note of notes) {
+        const end = note.time + note.duration;
+        let release = end;
+        const held = (sustain.get(note.channel) || []).find((iv) => end >= iv.down && end < iv.up);
+        if (held) {
+            release = Math.min(held.up, end + FILE_SUSTAIN_MAX_TAIL);
+        } else {
+            const frozen = (sostenuto.get(note.channel) || []).find(
+                (iv) => note.time <= iv.down && end > iv.down && end < iv.up
+            );
+            if (frozen) release = Math.min(frozen.up, end + FILE_SUSTAIN_MAX_TAIL);
+        }
+        release = Math.max(release, end);
+        note.releaseTime = release;
+        note.playDuration = Math.max(release - note.time, note.duration, 0.01);
+    }
+}
+
+function updateVoiceConsole() {
+  if (!midiVoiceConsole) return;
+  const programs = new Map();
+  if (midi.channelPrograms) {
+    for (const [ch, p] of midi.channelPrograms) programs.set(ch, p);
+  }
+  for (const [ch, p] of midiInState.programByChannel) programs.set(ch, p);
+  if (programs.size === 0) {
+    midiVoiceConsole.hidden = true;
+    midiVoiceRows.clear();
+    return;
+  }
+  midiVoiceConsole.hidden = false;
+  midiVoiceRows.clear();
+  const channels = [...programs.keys()].sort((a, b) => a - b);
+  const rows = [];
+  const VC_COLORS = [
+    "#4f8cff", "#22b8a6", "#3ddc84", "#a3d33b",
+    "#ffcf33", "#ff9f1c", "#ff6b4a", "#ff5c8a",
+    "#c86bff", "#8b6bff", "#5ad0ff", "#39c5d6",
+    "#7bd13b", "#ffd24d", "#ff7a59", "#e06bd6"
+  ];
+  for (const ch of channels) {
+    const p = programs.get(ch);
+    const inst = (PROGRAM_TO_SOUNDFONT[p]) || "acoustic_grand_piano";
+    const cn = INSTRUMENT_CN[inst] || inst;
+    const color = VC_COLORS[ch % VC_COLORS.length];
+    rows.push(
+      `<span class="vc-row" data-ch="${ch}" style="--vc-color:${color}">` +
+      `<span class="vc-ch">通道 ${ch + 1}</span>` +
+      `<span class="vc-name">${cn}</span>` +
+      `<span class="vc-vol"><span class="vc-vol-fill" style="width:100%"></span></span></span>`
+    );
+  }
+  midiVoiceConsole.innerHTML = rows.join("");
+  midiVoiceConsole.querySelectorAll(".vc-row").forEach((el) => {
+    const ch = Number(el.dataset.ch);
+    midiVoiceRows.set(ch, el);
+    const st = midiInState.ccByChannel.get(ch);
+    if (st) {
+      const level = (st.cc7 ?? 1) * (st.cc11 ?? 1);
+      const fill = el.querySelector(".vc-vol-fill");
+      if (fill) fill.style.width = Math.round(Math.max(0, Math.min(1, level)) * 100) + "%";
+    }
+  });
+}
+
+function markVoiceActive(channel, endTime) {
+  const row = midiVoiceRows.get(channel);
+  if (!row) return;
+  row.classList.add("active");
+  const prev = midiVoiceTimers.get(channel);
+  if (prev) clearTimeout(prev);
+  if (endTime == null) {
+    midiVoiceTimers.delete(channel);
+    return;
+  }
+  const delay = Math.max(0, (endTime - audio.ctx.currentTime) * 1000);
+  midiVoiceTimers.set(channel, setTimeout(() => {
+    row.classList.remove("active");
+    midiVoiceTimers.delete(channel);
+  }, delay));
+}
+
+function clearVoiceActive(channel) {
+  const row = midiVoiceRows.get(channel);
+  if (!row) return;
+  const prev = midiVoiceTimers.get(channel);
+  if (prev) clearTimeout(prev);
+  midiVoiceTimers.delete(channel);
+  row.classList.remove("active");
+}
+
+function updateVoiceConsoleVolume(channel, level) {
+  const row = midiVoiceRows.get(channel);
+  if (!row) return;
+  const fill = row.querySelector(".vc-vol-fill");
+  if (fill) {
+    fill.style.width = Math.round(Math.max(0, Math.min(1, level)) * 100) + "%";
+  }
 }
 
 async function loadMidiFile(file) {
@@ -1312,8 +1673,32 @@ async function loadMidiFile(file) {
         const buf = await file.arrayBuffer();
         const midiData = new Midi(buf);
         const notes = [];
+        const channelCandidates = new Map();
+        function considerChannelProgram(ch, program, hasNotes) {
+            const cur = channelCandidates.get(ch);
+            if (!cur) {
+                channelCandidates.set(ch, { program, hasNotes });
+                return;
+            }
+            if (program === 0) return; 
+            if (cur.program === 0) {
+                channelCandidates.set(ch, { program, hasNotes });
+            } else if (hasNotes && !cur.hasNotes) {
+                channelCandidates.set(ch, { program, hasNotes });
+            }
+        }
         for (const track of midiData.tracks) {
-            if (track.channel === 9) continue; // skip drum track (channel 10 = 9 in 0-indexed)
+            const ch = track.channel == null ? 0 : track.channel;
+            if (ch === 9) continue;
+            considerChannelProgram(ch, normalizeProgram(track.instrument), track.notes.length > 0);
+        }
+        const channelPrograms = new Map();
+        for (const [ch, cand] of channelCandidates) {
+            channelPrograms.set(ch, cand.program);
+        }
+        for (const track of midiData.tracks) {
+            const ch = track.channel == null ? 0 : track.channel;
+            if (ch === 9) continue; 
             for (const note of track.notes) {
                 if (note.midi < 0 || note.midi > 127) continue;
                 notes.push({
@@ -1322,17 +1707,59 @@ async function loadMidiFile(file) {
                     time: note.time,
                     duration: Math.max(note.duration, 0.01),
                     velocity: note.velocity,
+                    channel: ch,
                 });
             }
         }
+        const pedalEvents = [];
+        for (const track of midiData.tracks) {
+            const ch = track.channel == null ? 0 : track.channel;
+            for (const name of Object.keys(FILE_CC)) {
+                const cc = FILE_CC[name];
+                for (const ev of trackControlChanges(track, cc)) {
+                    pedalEvents.push({
+                        time: ev.time,
+                        name,
+                        cc,
+                        channel: ch,
+                        on: (ev.value || 0) >= FILE_PEDAL_ON,
+                    });
+                }
+            }
+        }
+        pedalEvents.sort((a, b) => a.time - b.time);
+
+        const ccEvents = [];
+        for (const track of midiData.tracks) {
+            const ch = track.channel == null ? 0 : track.channel;
+            if (ch === 9) continue;
+            for (const cc of [7, 11]) {
+                for (const ev of trackControlChanges(track, cc)) {
+                    ccEvents.push({ time: ev.time, channel: ch, cc, value: ev.value || 0 });
+                }
+            }
+        }
+        ccEvents.sort((a, b) => a.time - b.time);
+
         notes.sort((a, b) => a.time - b.time);
+        applyPedalsToNotes(notes, pedalEvents);
         midi.notes = notes;
+        midi.pedalEvents = pedalEvents;
+        midi.ccEvents = ccEvents;
+        midi.channelPrograms = channelPrograms;
+        updateVoiceConsole();
+        preloadMidiChannelSoundfonts();
         midi.totalDuration = midiData.duration || 0;
+        for (const note of notes) {
+            if (note.releaseTime > midi.totalDuration) midi.totalDuration = note.releaseTime;
+        }
         midi.status = "loaded";
     } catch (err) {
         console.error("Failed to load MIDI:", err);
         midi.fileName = null;
         midi.notes = [];
+        midi.pedalEvents = [];
+        midi.ccEvents = [];
         midi.totalDuration = 0;
         midi.status = "idle";
         alert("无法加载 MIDI 文件：" + (err && err.message ? err.message : err));
@@ -1361,6 +1788,15 @@ function scheduleFrom(elapsed) {
     if (!midi.soundfont) return;
     midi.ctxStartTime = audio.ctx.currentTime;
     midi.scheduleIndex = 0;
+    midi.pedalIndex = 0;
+    midi.ccIndex = 0;
+    midi.ccState = new Map();
+    for (const sf of midi.channelSf.values()) {
+        if (typeof sf.setVolume === "function") sf.setVolume(100);
+    }
+    for (const [ch] of midiVoiceRows) {
+        updateVoiceConsoleVolume(ch, 1);
+    }
     midi.schedulerTimer = null;
     midi.highlightIndex = 0;
     midi.highlightRaf = null;
@@ -1371,11 +1807,24 @@ function scheduleFrom(elapsed) {
     // Build highlight events array (ON and OFF events sorted by time)
     midi.highlightEvents = [];
     for (const note of midi.notes) {
-        if (note.time + note.duration <= elapsed) continue;
-        midi.highlightEvents.push({ time: note.time, type: 'on', name: note.name });
-        midi.highlightEvents.push({ time: note.time + note.duration, type: 'off', name: note.name });
+        if (note.releaseTime <= elapsed) continue;
+        midi.highlightEvents.push({ time: note.time, type: 'on', name: note.name, channel: note.channel });
+        midi.highlightEvents.push({ time: note.releaseTime, type: 'off', name: note.name, channel: note.channel });
+    }
+    const initialPedal = new Map();
+    for (const ev of midi.pedalEvents) {
+        if (ev.time <= elapsed) {
+            initialPedal.set(ev.name, ev.on);
+            continue;
+        }
+        midi.highlightEvents.push({ time: ev.time, type: 'pedal', name: ev.name, on: ev.on });
     }
     midi.highlightEvents.sort((a, b) => a.time - b.time);
+    for (const [name, on] of initialPedal) {
+        if (!on) continue;
+        setPedalFile(name, true);
+        scheduleMidiOutControlChange(FILE_CC[name], 127, midi.ctxStartTime);
+    }
 
     // Audio lookahead scheduler
     function schedulerTick() {
@@ -1390,23 +1839,60 @@ function scheduleFrom(elapsed) {
             const offset = note.time - elapsed;
             const audioTime = midi.ctxStartTime + offset;
 
-            if (note.time + note.duration > currentTime) {
+            if (note.releaseTime > currentTime) {
+                const vel = Math.max(0.05, Math.min(1, note.velocity || 0.8)) * 127;
+                const sf = midi.channelSf.get(note.channel) || midi.soundfont;
                 try {
-                    const vel = Math.max(0.05, Math.min(1, note.velocity || 0.8)) * 127;
-                    const stopFn = midi.soundfont.start({
+                    const stopFn = sf.start({
                         note: note.name,
                         time: audioTime,
-                        duration: note.duration,
+                        duration: note.playDuration,
                         velocity: vel,
                     });
                     if (typeof stopFn === "function") {
                         midi.stopFns.push(stopFn);
-                        addMidiVoice(stopFn, audioTime + note.duration);
+                        addMidiVoice(stopFn, audioTime + note.playDuration);
+                        markVoiceActive(note.channel, audioTime + note.playDuration);
                     }
                 } catch (err) {}
+                scheduleMidiOutNote(note, audioTime, vel);
             }
 
             midi.scheduleIndex++;
+        }
+
+        while (midi.pedalIndex < midi.pedalEvents.length) {
+            const ev = midi.pedalEvents[midi.pedalIndex];
+            if (ev.time > scheduleUntil) break;
+            scheduleMidiOutControlChange(
+                ev.cc,
+                ev.on ? 127 : 0,
+                midi.ctxStartTime + (ev.time - elapsed)
+            );
+            midi.pedalIndex++;
+        }
+
+        while (midi.ccIndex < midi.ccEvents.length) {
+            const ev = midi.ccEvents[midi.ccIndex];
+            if (ev.time > scheduleUntil) break;
+            const st = midi.ccState.get(ev.channel) || { cc7: 1, cc11: 1 };
+            if (ev.cc === 7) st.cc7 = ev.value;
+            else if (ev.cc === 11) st.cc11 = ev.value;
+            midi.ccState.set(ev.channel, st);
+            const ch = ev.channel, cc7 = st.cc7, cc11 = st.cc11;
+            const audioTime = midi.ctxStartTime + (ev.time - elapsed);
+            const delayMs = (audioTime - audio.ctx.currentTime) * 1000;
+            const apply = () => {
+                const sf = midi.channelSf.get(ch);
+                if (sf && typeof sf.setVolume === "function") {
+                    sf.setVolume(cc7 * cc11 * 100);
+                }
+                updateVoiceConsoleVolume(ch, cc7 * cc11);
+            };
+            if (delayMs <= 0) apply();
+            else setTimeout(apply, delayMs);
+            scheduleMidiOutControlChange(ev.cc, ev.value * 127, audioTime);
+            midi.ccIndex++;
         }
 
         if (midi.scheduleIndex >= midi.notes.length) {
@@ -1434,8 +1920,10 @@ function scheduleFrom(elapsed) {
 
             if (event.type === 'on') {
                 midiHighlightOn(event.name);
-            } else {
+            } else if (event.type === 'off') {
                 midiHighlightOff(event.name);
+            } else if (event.type === 'pedal') {
+                setPedalFile(event.name, event.on);
             }
             midi.highlightIndex++;
         }
@@ -1451,7 +1939,7 @@ function scheduleFrom(elapsed) {
 
 function startMidiPlayback() {
     if (midi.status !== "loaded" && midi.status !== "paused") return;
-    ensureSoundfont()
+    ensureMidiSoundfonts()
         .then(() => {
             // scheduleFrom() is allowed to run even if the user already
             // paused while the soundfont was loading.
@@ -1555,6 +2043,613 @@ window.addEventListener("drop", (e) => {
 
 updateMidiUI();
 
+const midiLinkBtn = document.getElementById("midi-link-btn");
+const midiLinkLabel = document.getElementById("midi-link-label");
+const midiPanelEl = document.getElementById("midi-device-panel");
+const midiStatusEl = document.getElementById("midi-device-status");
+const midiInputSel = document.getElementById("midi-input-select");
+const midiOutputSel = document.getElementById("midi-output-select");
+const midiInToggle = document.getElementById("toggle-midi-in");
+const midiOutToggle = document.getElementById("toggle-midi-out");
+const midiVelocityEl = document.getElementById("midi-velocity");
+const midiVelocityValEl = document.getElementById("midi-velocity-value");
+const midiChannelSel = document.getElementById("midi-channel");
+const pedalBtns = new Map(); 
+const pedalStateEls = new Map(); 
+document.querySelectorAll("[data-pedal]").forEach((el) => pedalBtns.set(el.dataset.pedal, el));
+document.querySelectorAll("[data-pedal-state]").forEach((el) => pedalStateEls.set(el.dataset.pedal, el));
+
+const PEDALS = {
+    soft: {
+        cc: 67, label: "弱音", code: "Period", kbId: "Period",
+        local: false, device: false, file: false, pointer: false,
+        send: (on) => midiDevice.sendSoft(on),
+    },
+    sostenuto: {
+        cc: 66, label: "保持", code: "Slash", kbId: "Slash",
+        local: false, device: false, file: false, pointer: false,
+        send: (on) => midiDevice.sendSostenuto(on),
+    },
+    sustain: {
+        cc: 64, label: "延音", code: "AltRight", kbId: "AltRight",
+        local: false, device: false, file: false, pointer: false,
+        send: (on) => midiDevice.sendSustain(on),
+    },
+};
+const PEDAL_BY_CODE = new Map();
+Object.keys(PEDALS).forEach((name) => {
+    if (PEDALS[name].code) PEDAL_BY_CODE.set(PEDALS[name].code, name);
+});
+
+const MIDI_SETUP_KEY = "fnpiano.midiSetup.v2";
+const MIDI_AUTOCONNECT_KEY = "fnpiano.midiAutoconnect";
+
+const midiInState = {
+    held: new Map(), 
+    heldSound: new Map(),
+    pedaled: new Set(), 
+    sostenuto: new Set(),
+    sustain: false,
+    programByChannel: new Map(),
+    ccByChannel: new Map(),
+    sfByChannel: new Map(),
+    heldCountByChannel: new Map(),
+};
+
+function deviceHeldCount(channel) {
+    return midiInState.heldCountByChannel.get(channel) || 0;
+}
+function deviceHeldInc(channel) {
+    const n = deviceHeldCount(channel) + 1;
+    midiInState.heldCountByChannel.set(channel, n);
+    return n;
+}
+function deviceHeldDec(channel) {
+    const n = deviceHeldCount(channel) - 1;
+    if (n <= 0) midiInState.heldCountByChannel.delete(channel);
+    else midiInState.heldCountByChannel.set(channel, n);
+    return Math.max(0, n);
+}
+
+function sendMidiOutNoteOn(name) {
+    const midi = noteNameToMidi(name);
+    if (midi == null) return;
+    midiDevice.sendNoteOn(midi, midiDevice.velocity);
+}
+
+function sendMidiOutNoteOff(name) {
+    const midi = noteNameToMidi(name);
+    if (midi == null) return;
+    midiDevice.sendNoteOff(midi);
+}
+
+function scheduleMidiOutNote(note, audioTime, velocity) {
+    if (!midiDevice.outEnabled || !midiDevice.output) return;
+    midiDevice.sendNoteOn(
+        note.midi,
+        velocity,
+        midiDevice.channel,
+        audioTimeToMidiTimestamp(audioTime, audio.ctx)
+    );
+    midiDevice.sendNoteOff(
+        note.midi,
+        midiDevice.channel,
+        audioTimeToMidiTimestamp(audioTime + note.duration, audio.ctx)
+    );
+}
+
+function scheduleMidiOutControlChange(cc, value, audioTime) {
+    if (!midiDevice.outEnabled || !midiDevice.output) return;
+    midiDevice.sendControlChange(
+        cc,
+        value,
+        midiDevice.channel,
+        audioTimeToMidiTimestamp(audioTime, audio.ctx)
+    );
+}
+
+
+function onDeviceNoteOn(midi, velocity, channel) {
+    const note = NOTE_BY_MIDI.get(midi);
+    if (!note) return;
+    midiInState.pedaled.delete(midi);
+    midiInState.sostenuto.delete(midi);
+    if (midiInState.held.has(midi)) {
+        releaseNote(midiInState.held.get(midi), { fromMidi: true });
+        stopDeviceSound(midi);
+        midiInState.held.delete(midi);
+        deviceHeldDec(channel);
+    }
+    midiInState.held.set(midi, note.name);
+    deviceHeldInc(channel);
+    if (!midiInState.programByChannel.has(channel)) {
+        midiInState.programByChannel.set(channel, 0);
+        updateVoiceConsole();
+    }
+    const program = midiInState.programByChannel.get(channel);
+    playNoteViaProgram(note, velocity, program, midi, channel);
+    holdNote(note.name, { fromMidi: true });
+    markVoiceActive(channel);
+}
+
+function onDeviceNoteOff(midi, channel) {
+    const name = midiInState.held.get(midi);
+    if (name == null) return;
+    midiInState.held.delete(midi);
+    deviceHeldDec(channel);
+    if (midiInState.sostenuto.has(midi)) return;
+    if (midiInState.sustain) {
+        midiInState.pedaled.add(midi); 
+        return;
+    }
+    stopDeviceSound(midi);
+    releaseNote(name, { fromMidi: true });
+    if (deviceHeldCount(channel) === 0) clearVoiceActive(channel);
+}
+
+async function playNoteViaProgram(note, velocity, program, midi, channel) {
+    if (!midiInState.held.has(midi)) return;
+    const vel = clampVelocity(velocity);
+    const startOn = async (sf) => {
+        if (!sf) return false;
+        if (!midiInState.held.has(midi)) return false;
+        try {
+            const stopFn = sf.start({
+                note: note.name,
+                time: audio.ctx.currentTime + 0.02,
+                velocity: vel,
+            });
+            if (typeof stopFn !== "function") return false;
+            midiInState.heldSound.set(midi, { program, stopFn });
+            if (channel != null && typeof sf.setVolume === "function") {
+                const st = midiInState.ccByChannel.get(channel) || { cc7: 1, cc11: 1 };
+                sf.setVolume(st.cc7 * st.cc11 * 100);
+                midiInState.sfByChannel.set(channel, sf);
+            }
+            return true;
+        } catch (_) {
+            return false;
+        }
+    };
+    let sf;
+    try { sf = await getSoundfontForProgram(program); } catch (_) { sf = null; }
+    if (await startOn(sf)) return;
+    try {
+        const piano = await ensureSoundfont();
+        await startOn(piano);
+    } catch (_) {}
+}
+
+function stopDeviceSound(midi) {
+    const s = midiInState.heldSound.get(midi);
+    if (s && typeof s.stopFn === "function") {
+        try { s.stopFn(); } catch (_) {}
+    }
+    midiInState.heldSound.delete(midi);
+}
+
+function onDeviceProgramChange(program, channel) {
+    midiInState.programByChannel.set(channel, program);
+    getSoundfontForProgram(program).catch((_) => {});
+    updateVoiceConsole();
+}
+
+function onDeviceControlChange(cc, value, channel) {
+    if (cc !== 7 && cc !== 11) return;
+    const st = midiInState.ccByChannel.get(channel) || { cc7: 1, cc11: 1 };
+    if (cc === 7) st.cc7 = value / 127;
+    else st.cc11 = value / 127;
+    midiInState.ccByChannel.set(channel, st);
+    const level = st.cc7 * st.cc11;
+    const sf = midiInState.sfByChannel.get(channel);
+    if (sf && typeof sf.setVolume === "function") sf.setVolume(level * 100);
+    updateVoiceConsoleVolume(channel, level);
+}
+
+
+function updatePedalUI(name) {
+    const pedal = PEDALS[name];
+    if (!pedal) return;
+    const active = pedal.local || pedal.device || pedal.file;
+    const btn = pedalBtns.get(name);
+    const label = pedalStateEls.get(name);
+    if (btn) btn.classList.toggle("is-down", active);
+    if (label) {
+        label.textContent = pedal.file ? "文件"
+            : pedal.device ? "设备"
+            : pedal.local ? "踩下"
+            : "—";
+    }
+    const diagram = document.getElementById("keyboard-diagram");
+    const kbEl = diagram && pedal.kbId
+        ? diagram.querySelector(`[data-kb-id="${pedal.kbId}"]`)
+        : null;
+    if (kbEl) kbEl.classList.toggle("active", active);
+}
+
+function applySoftGain() {
+    setSoftPedalGain(PEDALS.soft.local || PEDALS.soft.device || PEDALS.soft.file);
+}
+
+function setPedalFile(name, on) {
+    const pedal = PEDALS[name];
+    if (!pedal || pedal.file === on) return;
+    pedal.file = on;
+    if (name === "soft") applySoftGain();
+    updatePedalUI(name);
+}
+
+function clearFilePedals() {
+    Object.keys(PEDALS).forEach((name) => {
+        if (!PEDALS[name].file) return;
+        PEDALS[name].file = false;
+        updatePedalUI(name);
+    });
+    applySoftGain();
+}
+
+function setPedalLocal(name, on) {
+    const pedal = PEDALS[name];
+    if (!pedal || pedal.local === on) return;
+    pedal.local = on;
+    pedal.send(on);
+    if (name === "soft") {
+        applySoftGain(); 
+    } else if (name === "sostenuto") {
+        if (on) captureLocalSostenuto();
+        else releaseLocalPedalNotes("sostenuto", PEDALS.sustain.local ? "sustain" : null);
+    } else if (name === "sustain" && !on) {
+        releaseLocalPedalNotes("sustain");
+    }
+    updatePedalUI(name);
+}
+
+function setPedalDevice(name, on) {
+    const pedal = PEDALS[name];
+    if (!pedal) return;
+    pedal.device = on;
+    updatePedalUI(name);
+}
+
+function releaseAllLocalPedals() {
+    Object.keys(PEDALS).forEach((name) => {
+        PEDALS[name].pointer = false;
+        setPedalLocal(name, false);
+    });
+}
+
+function onDeviceSustain(on) {
+    setPedalDevice("sustain", on);
+    midiInState.sustain = on;
+    if (on) return;
+    for (const midi of Array.from(midiInState.pedaled)) {
+        stopDeviceSound(midi);
+        const note = NOTE_BY_MIDI.get(midi);
+        if (note) releaseNote(note.name, { fromMidi: true });
+    }
+    midiInState.pedaled.clear();
+}
+
+function onDeviceSostenuto(on) {
+    setPedalDevice("sostenuto", on);
+    if (on) {
+        for (const midi of midiInState.held.keys()) midiInState.sostenuto.add(midi);
+        return;
+    }
+    for (const midi of Array.from(midiInState.sostenuto)) {
+        midiInState.sostenuto.delete(midi);
+        if (midiInState.held.has(midi)) continue; 
+        stopDeviceSound(midi);
+        const note = NOTE_BY_MIDI.get(midi);
+        if (note) releaseNote(note.name, { fromMidi: true });
+    }
+}
+
+function onDeviceSoft(on) {
+    setPedalDevice("soft", on);
+    applySoftGain();
+}
+
+function releaseAllMidiInNotes() {
+    for (const midi of Array.from(midiInState.heldSound.keys())) stopDeviceSound(midi);
+    for (const name of midiInState.held.values()) {
+        releaseNote(name, { fromMidi: true });
+    }
+    for (const midi of midiInState.pedaled) {
+        const note = NOTE_BY_MIDI.get(midi);
+        if (note) releaseNote(note.name, { fromMidi: true });
+    }
+    for (const midi of midiInState.sostenuto) {
+        const note = NOTE_BY_MIDI.get(midi);
+        if (note && !midiInState.held.has(midi)) releaseNote(note.name, { fromMidi: true });
+    }
+    midiInState.held.clear();
+    midiInState.pedaled.clear();
+    midiInState.sostenuto.clear();
+    midiInState.sustain = false;
+    Object.keys(PEDALS).forEach((name) => {
+        PEDALS[name].device = false;
+        updatePedalUI(name);
+    });
+    applySoftGain();
+}
+
+midiDevice.onNoteOn = onDeviceNoteOn;
+midiDevice.onNoteOff = onDeviceNoteOff;
+midiDevice.onProgramChange = onDeviceProgramChange;
+midiDevice.onControlChange = onDeviceControlChange;
+midiDevice.onSustain = onDeviceSustain;
+midiDevice.onSostenuto = onDeviceSostenuto;
+midiDevice.onSoft = onDeviceSoft;
+midiDevice.onAllNotesOff = releaseAllMidiInNotes;
+
+function hasOption(select, value) {
+    return Array.from(select.options).some((o) => o.value === value);
+}
+
+let midiInputChosen = false;
+
+function renderMidiPorts() {
+    const prevIn = midiDevice.inputId;
+    const prevOut = midiDevice.outputId;
+
+    midiInputSel.innerHTML = "";
+    const allOpt = document.createElement("option");
+    allOpt.value = "all";
+    allOpt.textContent = "全部输入";
+    midiInputSel.appendChild(allOpt);
+    midiDevice.inputs.forEach((port) => {
+        const o = document.createElement("option");
+        o.value = port.id;
+        o.textContent = port.name || port.id;
+        midiInputSel.appendChild(o);
+    });
+
+    midiOutputSel.innerHTML = "";
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = "不发送";
+    midiOutputSel.appendChild(noneOpt);
+    midiDevice.outputs.forEach((port) => {
+        const o = document.createElement("option");
+        o.value = port.id;
+        o.textContent = port.name || port.id;
+        midiOutputSel.appendChild(o);
+    });
+
+    if (!midiInputChosen && midiDevice.inputs.length) {
+        midiDevice.inputId = midiDevice.inputs[0].id;
+    } else {
+        midiDevice.inputId = hasOption(midiInputSel, prevIn) ? prevIn : "all";
+    }
+    midiDevice.outputId =
+        prevOut && hasOption(midiOutputSel, prevOut)
+            ? prevOut
+            : midiDevice.outputs[0]
+            ? midiDevice.outputs[0].id
+            : "";
+}
+
+function syncMidiControls() {
+    midiInputSel.value = hasOption(midiInputSel, midiDevice.inputId) ? midiDevice.inputId : "all";
+    midiOutputSel.value = hasOption(midiOutputSel, midiDevice.outputId) ? midiDevice.outputId : "";
+    midiChannelSel.value = String(midiDevice.channel);
+    midiVelocityEl.value = String(midiDevice.velocity);
+    midiVelocityValEl.textContent = String(midiDevice.velocity);
+    midiInToggle.checked = midiDevice.inEnabled;
+    midiOutToggle.checked = midiDevice.outEnabled;
+}
+
+function updateMidiDeviceUI() {
+    const hasAccess = !!midiDevice.access;
+    const hasDevice = hasAccess && (midiDevice.inputs.length > 0 || midiDevice.outputs.length > 0);
+    midiLinkBtn.classList.toggle("is-connected", hasDevice);
+    if (!midiDevice.supported) {
+        midiLinkLabel.textContent = "MIDI 不可用";
+        midiStatusEl.textContent = "当前浏览器不支持 Web MIDI";
+        midiLinkBtn.title = "当前浏览器不支持 Web MIDI";
+    } else if (!hasAccess) {
+        midiLinkLabel.textContent = "MIDI 设备";
+        midiStatusEl.textContent = "未连接 · 点击按钮授权并连接";
+    } else if (!hasDevice) {
+        midiLinkLabel.textContent = "MIDI 设备";
+        midiStatusEl.textContent = "已授权 · 未检测到 MIDI 设备";
+    } else {
+        midiStatusEl.textContent = `已连接 · 输入 ${midiDevice.inputs.length} · 输出 ${midiDevice.outputs.length}`;
+        midiLinkLabel.textContent = "已连接";
+    }
+    midiInputSel.disabled = !hasAccess;
+    midiOutputSel.disabled = !hasAccess;
+    midiInToggle.disabled = !hasAccess;
+    midiOutToggle.disabled = !hasAccess;
+    pedalBtns.forEach((btn) => {
+        btn.disabled = !hasAccess || !midiDevice.output;
+    });
+}
+
+function saveMidiSetup() {
+    try {
+        localStorage.setItem(
+            MIDI_SETUP_KEY,
+            JSON.stringify({
+                inputId: midiDevice.inputId,
+                outputId: midiDevice.outputId,
+                channel: midiDevice.channel,
+                velocity: midiDevice.velocity,
+                inEnabled: midiDevice.inEnabled,
+                outEnabled: midiDevice.outEnabled,
+            })
+        );
+    } catch (_) {}
+}
+
+function applyMidiSetup() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(MIDI_SETUP_KEY) || "null"); } catch (_) {}
+    if (!saved || typeof saved !== "object") return;
+    if (typeof saved.inputId === "string") {
+        midiDevice.inputId = saved.inputId;
+        midiInputChosen = true;
+    }
+    if (typeof saved.outputId === "string") midiDevice.outputId = saved.outputId;
+    if (Number.isFinite(saved.channel)) midiDevice.channel = Math.max(0, Math.min(15, saved.channel | 0));
+    if (Number.isFinite(saved.velocity)) midiDevice.velocity = Math.max(1, Math.min(127, saved.velocity | 0));
+    if (typeof saved.inEnabled === "boolean") midiDevice.inEnabled = saved.inEnabled;
+    if (typeof saved.outEnabled === "boolean") midiDevice.outEnabled = saved.outEnabled;
+}
+
+async function connectMidiDevice() {
+    if (!midiDevice.supported) {
+        updateMidiDeviceUI();
+        alert("当前浏览器不支持 Web MIDI");
+        return false;
+    }
+    midiStatusEl.textContent = "正在请求授权…";
+    try {
+        await midiDevice.connect();
+        await initAudio();
+        if (audio.ctx.state === "suspended") {
+            try { await audio.ctx.resume(); } catch (_) {}
+        }
+        applyMidiSetup();
+        renderMidiPorts();
+        syncMidiControls();
+        updateMidiDeviceUI();
+        try { localStorage.setItem(MIDI_AUTOCONNECT_KEY, "1"); } catch (_) {}
+        return true;
+    } catch (err) {
+        console.error("MIDI connect failed:", err);
+        const msg = err && err.message ? err.message : String(err);
+        midiStatusEl.textContent = "连接失败：" + msg;
+        alert("无法连接 MIDI 设备：" + msg);
+        updateMidiDeviceUI();
+        return false;
+    }
+}
+
+midiDevice.onPortsChange = () => {
+    renderMidiPorts();
+    syncMidiControls();
+    updateMidiDeviceUI();
+};
+
+midiLinkBtn.addEventListener("click", async () => {
+    const opening = midiPanelEl.hidden;
+    midiPanelEl.hidden = !opening;
+    if (!opening) {
+        updateMidiDeviceUI();
+        return;
+    }
+    updateMidiDeviceUI();
+    if (!midiDevice.access) await connectMidiDevice();
+});
+
+document.addEventListener("pointerdown", (e) => {
+    if (midiPanelEl.hidden) return;
+    const wrap = midiLinkBtn.parentElement;
+    if (wrap && wrap.contains(e.target)) return;
+    midiPanelEl.hidden = true;
+    updateMidiDeviceUI();
+});
+
+midiInputSel.addEventListener("change", () => {
+    midiDevice.inputId = midiInputSel.value;
+    midiInputChosen = true;
+    releaseAllMidiInNotes();
+    saveMidiSetup();
+});
+
+midiOutputSel.addEventListener("change", () => {
+    midiDevice.panic(); // cut anything left ringing on the previous device
+    midiDevice.outputId = midiOutputSel.value;
+    saveMidiSetup();
+    updateMidiDeviceUI();
+});
+
+midiInToggle.addEventListener("change", () => {
+    midiDevice.inEnabled = midiInToggle.checked;
+    if (!midiDevice.inEnabled) releaseAllMidiInNotes();
+    saveMidiSetup();
+});
+
+midiOutToggle.addEventListener("change", () => {
+    midiDevice.outEnabled = midiOutToggle.checked;
+    if (!midiDevice.outEnabled) midiDevice.panic();
+    saveMidiSetup();
+});
+
+midiVelocityEl.addEventListener("input", () => {
+    midiDevice.velocity = parseInt(midiVelocityEl.value, 10) || 100;
+    midiVelocityValEl.textContent = String(midiDevice.velocity);
+});
+midiVelocityEl.addEventListener("change", saveMidiSetup);
+
+midiChannelSel.addEventListener("change", () => {
+    midiDevice.panic(); // notes sent on the old channel would hang
+    midiDevice.channel = parseInt(midiChannelSel.value, 10) || 0;
+    saveMidiSetup();
+});
+
+pedalBtns.forEach((btn, name) => {
+    btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        PEDALS[name].pointer = true;
+        setPedalLocal(name, true);
+    });
+});
+
+function releasePointerPedals() {
+    Object.keys(PEDALS).forEach((name) => {
+        if (!PEDALS[name].pointer) return;
+        PEDALS[name].pointer = false;
+        setPedalLocal(name, false);
+    });
+}
+window.addEventListener("pointerup", releasePointerPedals);
+window.addEventListener("pointercancel", releasePointerPedals);
+
+(function initMidiChannelOptions() {
+    for (let ch = 0; ch < 16; ch++) {
+        const o = document.createElement("option");
+        o.value = String(ch);
+        o.textContent = String(ch + 1);
+        midiChannelSel.appendChild(o);
+    }
+    midiChannelSel.value = "0";
+})();
+
+function armMidiAutoConnect() {
+    if (!midiDevice.supported) return;
+    let saved = null;
+    try { saved = localStorage.getItem(MIDI_AUTOCONNECT_KEY); } catch (_) {}
+    if (saved === "1") {
+        midiDevice.connect().then(() => {
+            applyMidiSetup();
+            renderMidiPorts();
+            syncMidiControls();
+            updateMidiDeviceUI();
+        }).catch(() => {});
+        return;
+    }
+    const attempt = async () => {
+        window.removeEventListener("click", attempt);
+        window.removeEventListener("keydown", attempt);
+        if (midiDevice.access) return;
+        try {
+            await midiDevice.connect();
+            applyMidiSetup();
+            renderMidiPorts();
+            syncMidiControls();
+            updateMidiDeviceUI();
+        } catch (_) {
+        }
+    };
+    window.addEventListener("click", attempt, { once: true });
+    window.addEventListener("keydown", attempt, { once: true });
+}
+
+updateMidiDeviceUI();
+
 // ---------- Init ----------
 (async function init() {
     renderPiano();
@@ -1627,4 +2722,6 @@ updateMidiUI();
     };
     window.addEventListener("pointerdown", ensureIframeFocus);
     window.addEventListener("touchstart", ensureIframeFocus);
+
+    armMidiAutoConnect();
 })();

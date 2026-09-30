@@ -39,28 +39,166 @@
         <span>音色</span>
         <select id="midi-instrument">
           <option value="default">默认采样</option>
-          <option value="acoustic_grand_piano">原声钢琴</option>
-          <option value="bright_acoustic_piano">明亮钢琴</option>
-          <option value="electric_grand_piano">电三角钢琴</option>
-          <option value="honkytonk_piano">酒吧钢琴</option>
-          <option value="electric_piano_1">电钢琴1</option>
-          <option value="electric_piano_2">电钢琴2</option>
-          <option value="harpsichord">羽管键琴</option>
-          <option value="clavinet">击弦键琴</option>
-          <option value="celesta">钢片琴</option>
-          <option value="vibraphone">颤音琴</option>
-          <option value="church_organ">管风琴</option>
-          <option value="acoustic_guitar_nylon">尼龙弦吉他</option>
-          <option value="acoustic_guitar_steel">钢弦吉他</option>
-          <option value="electric_guitar_jazz">爵士电吉他</option>
-          <option value="violin">小提琴</option>
-          <option value="cello">大提琴</option>
-          <option value="trumpet">小号</option>
-          <option value="french_horn">圆号</option>
-          <option value="trombone">长号</option>
-          <option value="alto_sax">中音萨克斯</option>
-          <option value="flute">长笛</option>
-          <option value="choir_aahs">人声合唱</option>
+          <optgroup label="钢琴 Piano">
+            <option value="acoustic_grand_piano">原声钢琴</option>
+            <option value="bright_acoustic_piano">明亮钢琴</option>
+            <option value="electric_grand_piano">电三角钢琴</option>
+            <option value="honkytonk_piano">酒吧钢琴</option>
+            <option value="electric_piano_1">电钢琴1</option>
+            <option value="electric_piano_2">电钢琴2</option>
+            <option value="harpsichord">羽管键琴</option>
+            <option value="clavinet">击弦键琴</option>
+          </optgroup>
+          <optgroup label="半音打击乐器 Chromatic Percussion">
+            <option value="celesta">钢片琴</option>
+            <option value="glockenspiel">钟琴</option>
+            <option value="music_box">八音盒</option>
+            <option value="vibraphone">颤音琴</option>
+            <option value="marimba">马林巴</option>
+            <option value="xylophone">木琴</option>
+            <option value="tubular_bells">管钟</option>
+            <option value="dulcimer">扬琴</option>
+          </optgroup>
+          <optgroup label="风琴 Organ">
+            <option value="drawbar_organ">拉杆风琴</option>
+            <option value="percussive_organ">打击风琴</option>
+            <option value="rock_organ">摇滚风琴</option>
+            <option value="church_organ">管风琴</option>
+            <option value="reed_organ">簧风琴</option>
+            <option value="accordion">手风琴</option>
+            <option value="harmonica">口琴</option>
+            <option value="tango_accordion">探戈手风琴</option>
+          </optgroup>
+          <optgroup label="吉他 Guitar">
+            <option value="acoustic_guitar_nylon">尼龙弦吉他</option>
+            <option value="acoustic_guitar_steel">钢弦吉他</option>
+            <option value="electric_guitar_jazz">爵士电吉他</option>
+            <option value="electric_guitar_clean">清音电吉他</option>
+            <option value="electric_guitar_muted">闷音电吉他</option>
+            <option value="overdriven_guitar">过载吉他</option>
+            <option value="distortion_guitar">失真吉他</option>
+            <option value="guitar_harmonics">吉他泛音</option>
+          </optgroup>
+          <optgroup label="贝斯 Bass">
+            <option value="acoustic_bass">原声贝斯</option>
+            <option value="electric_bass_finger">指弹电贝斯</option>
+            <option value="electric_bass_pick">拨片电贝斯</option>
+            <option value="fretless_bass">无品贝斯</option>
+            <option value="slap_bass_1">击弦贝斯1</option>
+            <option value="slap_bass_2">击弦贝斯2</option>
+            <option value="synth_bass_1">合成贝斯1</option>
+            <option value="synth_bass_2">合成贝斯2</option>
+          </optgroup>
+          <optgroup label="弦乐器 Strings">
+            <option value="violin">小提琴</option>
+            <option value="viola">中提琴</option>
+            <option value="cello">大提琴</option>
+            <option value="contrabass">低音提琴</option>
+            <option value="tremolo_strings">颤音弦乐</option>
+            <option value="pizzicato_strings">拨弦弦乐</option>
+            <option value="orchestral_harp">竖琴</option>
+            <option value="timpani">定音鼓</option>
+          </optgroup>
+          <optgroup label="合奏 Ensemble">
+            <option value="string_ensemble_1">弦乐合奏1</option>
+            <option value="string_ensemble_2">弦乐合奏2</option>
+            <option value="synth_strings_1">合成弦乐1</option>
+            <option value="synth_strings_2">合成弦乐2</option>
+            <option value="choir_aahs">人声合唱</option>
+            <option value="voice_oohs">人声噢</option>
+            <option value="synth_choir">合成合唱</option>
+            <option value="orchestra_hit">乐团齐奏</option>
+          </optgroup>
+          <optgroup label="铜管乐器 Brass">
+            <option value="trumpet">小号</option>
+            <option value="trombone">长号</option>
+            <option value="tuba">大号</option>
+            <option value="muted_trumpet">弱音小号</option>
+            <option value="french_horn">圆号</option>
+            <option value="brass_section">铜管组</option>
+            <option value="synth_brass_1">合成铜管1</option>
+            <option value="synth_brass_2">合成铜管2</option>
+          </optgroup>
+          <optgroup label="簧片乐器 Reed">
+            <option value="soprano_sax">高音萨克斯</option>
+            <option value="alto_sax">中音萨克斯</option>
+            <option value="tenor_sax">次中音萨克斯</option>
+            <option value="baritone_sax">上低音萨克斯</option>
+            <option value="oboe">双簧管</option>
+            <option value="english_horn">英国管</option>
+            <option value="bassoon">大管</option>
+            <option value="clarinet">单簧管</option>
+          </optgroup>
+          <optgroup label="吹管乐器 Pipe">
+            <option value="piccolo">短笛</option>
+            <option value="flute">长笛</option>
+            <option value="recorder">竖笛</option>
+            <option value="pan_flute">排箫</option>
+            <option value="blown_bottle">瓶笛</option>
+            <option value="shakuhachi">尺八</option>
+            <option value="whistle">哨子</option>
+            <option value="ocarina">陶笛</option>
+          </optgroup>
+          <optgroup label="合成主音 Synth Lead">
+            <option value="lead_1_square">方波主音</option>
+            <option value="lead_2_sawtooth">锯齿波主音</option>
+            <option value="lead_3_calliope">蒸汽风琴主音</option>
+            <option value="lead_4_chiff">吹管主音</option>
+            <option value="lead_5_charang">吉他主音</option>
+            <option value="lead_6_voice">人声主音</option>
+            <option value="lead_7_fifths">五度主音</option>
+            <option value="lead_8_bass__lead">贝斯主音</option>
+          </optgroup>
+          <optgroup label="合成铺底 Synth Pad">
+            <option value="pad_1_new_age">新世纪铺底</option>
+            <option value="pad_2_warm">温暖铺底</option>
+            <option value="pad_3_polysynth">复音合成铺底</option>
+            <option value="pad_4_choir">合唱铺底</option>
+            <option value="pad_5_bowed">弓弦铺底</option>
+            <option value="pad_6_metallic">金属铺底</option>
+            <option value="pad_7_halo">光环铺底</option>
+            <option value="pad_8_sweep">扫掠铺底</option>
+          </optgroup>
+          <optgroup label="合成效果 Synth Effects">
+            <option value="fx_1_rain">雨声效果</option>
+            <option value="fx_2_soundtrack">原声效果</option>
+            <option value="fx_3_crystal">水晶效果</option>
+            <option value="fx_4_atmosphere">大气效果</option>
+            <option value="fx_5_brightness">明亮效果</option>
+            <option value="fx_6_goblins">妖精效果</option>
+            <option value="fx_7_echoes">回声效果</option>
+            <option value="fx_8_scifi">科幻效果</option>
+          </optgroup>
+          <optgroup label="民族乐器 Ethnic">
+            <option value="sitar">西塔琴</option>
+            <option value="banjo">班卓琴</option>
+            <option value="shamisen">三味线</option>
+            <option value="koto">古筝</option>
+            <option value="kalimba">卡林巴</option>
+            <option value="bagpipe">风笛</option>
+            <option value="fiddle">民间提琴</option>
+            <option value="shanai">唢呐</option>
+          </optgroup>
+          <optgroup label="打击乐器 Percussive">
+            <option value="tinkle_bell">铃铛</option>
+            <option value="agogo">阿哥哥鼓</option>
+            <option value="steel_drums">钢鼓</option>
+            <option value="woodblock">木鱼</option>
+            <option value="taiko_drum">太鼓</option>
+            <option value="melodic_tom">旋律通通鼓</option>
+            <option value="synth_drum">合成鼓</option>
+            <option value="reverse_cymbal">反向镲</option>
+          </optgroup>
+          <optgroup label="特殊音效 Sound Effects">
+            <option value="guitar_fret_noise">吉他品丝噪声</option>
+            <option value="breath_noise">呼吸噪声</option>
+            <option value="seashore">海浪</option>
+            <option value="bird_tweet">鸟鸣</option>
+            <option value="telephone_ring">电话铃声</option>
+            <option value="helicopter">直升机</option>
+            <option value="applause">掌声</option>
+            <option value="gunshot">枪声</option>
+          </optgroup>
         </select>
       </label>
       <div class="midi-control">
@@ -82,12 +220,70 @@
         </button>
         <span id="midi-name" class="midi-name" hidden></span>
       </div>
+
+      <div class="midi-device">
+        <button type="button" id="midi-link-btn" class="midi-btn" title="连接 MIDI 设备（电钢琴 / MIDI 键盘）">
+          <svg class="midi-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zM4 7h16v3H4V7zm2.5 8.5a1 1 0 0 1-1-1V10a1 1 0 0 1 2 0v4.5a1 1 0 0 1-1 1zm3.5 0a1 1 0 0 1-1-1V10a1 1 0 0 1 2 0v4.5a1 1 0 0 1-1 1zm3.5 0a1 1 0 0 1-1-1V10a1 1 0 0 1 2 0v4.5a1 1 0 0 1-1 1zm3.5 0a1 1 0 0 1-1-1V10a1 1 0 0 1 2 0v4.5a1 1 0 0 1-1 1z" />
+          </svg>
+          <span class="midi-btn-label" id="midi-link-label">MIDI 设备</span>
+        </button>
+        <div class="midi-device-panel" id="midi-device-panel" hidden>
+          <div class="midi-device-status" id="midi-device-status">未连接</div>
+
+          <div class="midi-device-row">
+            <span>输入设备</span>
+            <select id="midi-input-select"><option value="all">全部输入</option></select>
+            <label class="toggle" title="设备弹奏 → 网页发声">
+              <input type="checkbox" id="toggle-midi-in" checked />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+          </div>
+          <div class="midi-device-row">
+            <span>输出设备</span>
+            <select id="midi-output-select"><option value="">不发送</option></select>
+            <label class="toggle" title="网页 → 设备发声">
+              <input type="checkbox" id="toggle-midi-out" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+          </div>
+
+          <label class="midi-device-row" title="网页 → 设备发送音符时使用的力度">
+            <span>输出力度</span>
+            <input type="range" id="midi-velocity" min="1" max="127" value="100" />
+            <span class="midi-device-value" id="midi-velocity-value">100</span>
+          </label>
+          <label class="midi-device-row" title="网页 → 设备发送音符使用的 MIDI 通道（1-16）">
+            <span>输出通道</span>
+            <select id="midi-channel"></select>
+          </label>
+          <div class="midi-device-row" title="延音踏板 CC64（右踏板）：按住右 Shift 键或按钮">
+            <span>延音踏板</span>
+            <button type="button" class="midi-pedal" data-pedal="sustain">按住 <kbd>RAlt</kbd></button>
+            <span class="midi-device-value" data-pedal-state="sustain">—</span>
+          </div>
+          <div class="midi-device-row" title="弱音踏板 CC67（左踏板 / una corda）：按住 . 键或按钮">
+            <span>弱音踏板</span>
+            <button type="button" class="midi-pedal" data-pedal="soft">按住 <kbd>.</kbd></button>
+            <span class="midi-device-value" data-pedal-state="soft">—</span>
+          </div>
+          <div class="midi-device-row" title="保持音踏板 CC66（中踏板 / sostenuto）：按住 / 键或按钮">
+            <span>保持音踏板</span>
+            <button type="button" class="midi-pedal" data-pedal="sostenuto">按住 <kbd>/</kbd></button>
+            <span class="midi-device-value" data-pedal-state="sostenuto">—</span>
+          </div>
+
+          <div class="midi-device-hint">
+            输入输出相同设备时，请勿同时打开开关造成回环。
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
+  <div id="midi-voice-console" class="midi-voice-console" hidden></div>
+
   <main class="stage">
-
-
     <div class="piano" id="piano">
       <div class="piano-band">
         <div class="brand-strip" >

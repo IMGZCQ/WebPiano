@@ -1,0 +1,4 @@
+# Normalize line endings so Windows checkouts don't rewrite whole files.
+# Text files are stored with LF in the repository; binary assets (mp3, png,
+# exe, ...) are detected and left untouched by the `text=auto` heuristic.
+* text=auto

@@ -1,0 +1,6 @@
+# Local dev / runtime artifacts
+*.log
+
+# Test material (third-party MIDI files used for debugging playback)
+*.mid
+*.midi
